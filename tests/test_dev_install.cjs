@@ -97,7 +97,7 @@ const lists=[...Object.values(c.bar.layout),c.plugins];
 const found=lists.find(a=>a.some(v=>key(v)===id));
 if(process.argv[3]==='disable' && process.env.FAIL_DISABLE==='1') process.exit(7);
 if(process.argv[3]==='disable') {
-  // Cover both historical entry removal and Core's disabledPlugins contract.
+  // Cover placement removal and an explicitly configured disabledPlugins state.
   if (${architecture === 'aarch64'}) c.disabledPlugins=[...new Set([...(c.disabledPlugins||[]),id])];
   else if(found) found.splice(found.findIndex(v=>key(v)===id),1);
 }

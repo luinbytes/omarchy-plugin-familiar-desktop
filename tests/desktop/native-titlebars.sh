@@ -150,6 +150,13 @@ bash "$plugin/setup-in-app.sh" status
 phase=native-initial-rollback
 omarchy plugin disable "$plugin_id"
 omarchy restart shell
+# Core disables third-party widgets by removing their placement. disabledPlugins
+# is primarily for implicit first-party services; inspect Core's public state.
+familiar_disabled() {
+  omarchy-shell shell listPlugins | jq -e --arg id "$plugin_id" 'any(.[]; .id == $id and .enabled == false)' >/dev/null
+}
+wait_for familiar_disabled
+cp "$HOME/.config/omarchy/shell.json" "$EVIDENCE/native-disabled-shell.json"
 "$helper" titlebars migrate | jq -e '.state == "ready"'
 echo 'o.workspace_mode({ default = "floating" })' > "$HOME/.local/state/omarchy/workspace-layouts/default.lua"
 hyprctl reload
@@ -159,7 +166,8 @@ bash "$bundle/install-dev.sh" --rollback
 [[ $(git -C "$plugin" rev-parse HEAD) == "$baseline" ]]
 [[ ! -e "$helper" && ! -e "$state/dev-build.json" && ! -e "$plugin/bin/hyprbars" ]]
 jq -e '.backend == "omarchy"' "$HOME/.config/omarchy/familiar-titlebars/owner.json"
-jq -e --arg id "$plugin_id" '.disabledPlugins | index($id) != null' "$HOME/.config/omarchy/shell.json"
+diff -u <(jq -S . "$EVIDENCE/native-disabled-shell.json") <(jq -S . "$HOME/.config/omarchy/shell.json")
+wait_for familiar_disabled
 hyprctl eval "assert(familiar_titlebars == nil and hl.get_config('plugin.hyprbars.bar_height') == 30)" | grep -Fxq ok
 test -f /usr/lib/omarchy-hyprland-titlebars/titlebars.so
 hyprctl -j configerrors | jq -e 'all(.[]; . == "")'
@@ -169,4 +177,6 @@ bash "$bundle/install-dev.sh" --initial
 [[ -f "$state/setup-pending" ]]
 bash "$bundle/install-dev.sh" --rollback
 [[ $(git -C "$plugin" rev-parse HEAD) == "$baseline" && ! -e "$helper" ]]
+diff -u <(jq -S . "$EVIDENCE/native-disabled-shell.json") <(jq -S . "$HOME/.config/omarchy/shell.json")
+wait_for familiar_disabled
 echo 'PASS: official renderer, Core floating scope, Mac/Windows pointer controls, targeted actions, restore, reload, disable/removal, initial staging/setup and disabled-state rollback.'
