@@ -140,7 +140,8 @@ ColumnLayout {
             }]
         delegate: ColumnLayout {
             id: sizeRow
-            visible: modelData.key === "dockSize" ? content.navigation.shows("dock", "appearance") : content.navigation.shows("windows", "titlebars") && !content.officialTitlebars
+            objectName: modelData.key + "-choices"
+            visible: modelData.key === "dockSize" ? content.navigation.shows("dock", "appearance") : content.navigation.shows("windows", "titlebars")
             required property var modelData
             Layout.fillWidth: true
             Text {
@@ -166,6 +167,7 @@ ColumnLayout {
                     delegate: ActionButton {
                         required property var modelData
                         Layout.fillWidth: true
+                        objectName: sizeRow.modelData.key + "-" + modelData.key
                         text: modelData.label
                         selected: content.service[sizeRow.modelData.key] === modelData.key
                         onClicked: {
@@ -290,7 +292,7 @@ ColumnLayout {
             Layout.fillWidth: true
             wrapMode: Text.WordWrap
             textFormat: Text.PlainText
-            text: content.officialTitlebars ? "Mac or Windows controls using Omarchy’s renderer on floating workspaces (Super+L). Close, minimise and maximise target the clicked window; restore from the dock. Choose Omarchy to restore its default controls." : "Title bars with close, minimise and maximise. Restore minimised windows from the dock."
+            text: content.officialTitlebars ? "Mac/Windows controls on Omarchy’s floating workspaces (Super+L). Restore minimised windows from the dock. Choose Omarchy for its default controls." : "Title bars with close, minimise and maximise. Restore minimised windows from the dock."
             font.family: Style.font.family
             font.pixelSize: 11
             color: Commons.Color.popups.text

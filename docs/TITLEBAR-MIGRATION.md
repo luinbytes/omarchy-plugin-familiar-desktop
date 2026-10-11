@@ -64,7 +64,10 @@ Generated configuration checks the installed source's controls-v2 marker, so
 rollback to an older source cannot keep invoking unsupported helper arguments.
 
 Development installation retains the old binaries for rollback and still checks
-source/artifact identity. Official hosts allow only the audited v0.1.5 commit
+source/artifact identity. Before replacing a helper on an official host, the
+installer uses the verified bundle helper to restore Core defaults at the installed
+path; it does not rely on asynchronous QML teardown or an older helper
+understanding native button arguments. Official hosts allow only the audited v0.1.5 commit
 `439f97480bb0803f32137dcb700fbb939dc959ff` or guarded newer source. Rolling back to
 v0.1.5 restores that version's paused-controls behaviour, never private controls
 over Core. No version, release pin, package channel or system package is changed.

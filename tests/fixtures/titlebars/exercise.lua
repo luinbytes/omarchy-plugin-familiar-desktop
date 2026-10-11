@@ -62,6 +62,11 @@ if scenario == 'tiled' then
 end
 assert(#loads == 1 and loads[1] == '/usr/lib/omarchy-hyprland-titlebars/titlebars.so')
 assert(config.plugin.hyprbars.workspace_tag == 'omarchy-floating-workspace', 'scope must survive')
+if scenario == 'old-source' then
+  assert(familiar_titlebars == nil and #buttons == 2)
+  assert(config.plugin.hyprbars.bar_height == 30)
+  return
+end
 if scenario == 'changed-core' or scenario == 'late' or scenario == 'conflict' then
   assert(#buttons == (scenario == 'changed-core' and 3 or 2))
   assert(buttons[1].icon == '×' and buttons[2].icon == '□')

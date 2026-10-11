@@ -195,6 +195,17 @@ restore_placement() {
   rm -f "$before"
 }
 # Do not run unverified partial binaries when recovering a failed install.
+if [[ "$official" == true ]]; then
+  # Retire native button actions while the controls-v2 helper is still available.
+  # An older rollback helper may not understand --window. Verify the bundle even
+  # on recovery, and run at the installed path so ownership resolves correctly.
+  (cd "$bundle" && sha256sum --check --strict SHA256SUMS)
+  verify_assets "$bundle" "$bundle/DEV-BUILD.json"
+  omarchy plugin disable "$plugin_id"
+  install -m 755 "$bundle/familiar-desktop-linux-x86_64" "$plugin/bin/.familiar-desktop.dev"
+  mv "$plugin/bin/.familiar-desktop.dev" "$plugin/bin/familiar-desktop"
+  "$plugin/bin/familiar-desktop" titlebars disable
+fi
 if [[ "$mode" == install ]]; then
   "$plugin/bin/familiar-desktop" desktop restore
   if [[ "$official" != true ]]; then "$plugin/bin/familiar-desktop" titlebars disable; fi

@@ -52,6 +52,8 @@ TestCase {
         property var setup: null
         property bool taskbarSelected: false
         property bool dockAvailable: true
+        property bool titlebarsManagedByOmarchy: false
+        property string titlebarState: "configured"
         property bool titlebarBusy: false
         property string titlebarMessage: ""
         function setPreference(key, value) { root.recordPreference(key, value) }
@@ -133,6 +135,22 @@ TestCase {
         compare(closes.count, 2)
         compare(root.writes, 0)
         owner.setup = null
+    }
+    function test_officialControlsKeepSizeAndExclusions() {
+        owner.titlebarsManagedByOmarchy = true
+        settingsWindow.page = "windows"
+        settingsWindow.section = "titlebars"
+        wait(30)
+        verify(findChild(cardColumn, "titlebarSize-choices").visible)
+        verify(findChild(cardColumn, "skipBrowserTitlebars").visible)
+        var large = findChild(cardColumn, "titlebarSize-large")
+        root.writes = 0
+        mouseClick(large)
+        compare(root.writes, 1)
+        compare(root.lastPreference.key, "titlebarSize")
+        compare(root.lastPreference.value, "large")
+        owner.titlebarsManagedByOmarchy = false
+        root.writes = 0
     }
     function test_switchesUseTheirExistingSetters() {
         var cases = [

@@ -87,13 +87,16 @@ fs.writeFileSync(p,JSON.stringify(c));
   const readShell=()=>JSON.parse(fs.readFileSync(shellPath));
   ok(status());
   // Official-package path supports source-matched install and rollback without
-  // executing any private-backend setup/disable command or touching preferences.
+  // running private setup or changing preferences. The verified bundle helper
+  // clears native actions before an older rollback helper replaces it.
   write(officialLibrary,'official');write(env.CALLS,'');
   ok(run(a)); assert.equal(git('rev-parse','HEAD'),first);ok(status());
-  assert.doesNotMatch(log(),/titlebars (setup|disable)/);
+  assert.doesNotMatch(log(),/titlebars setup/);
+  assert.match(log(),/dev-a familiar-desktop titlebars disable/);
   assert.deepEqual(JSON.parse(fs.readFileSync(path.join(home,'.config/omarchy/familiar-desktop-settings.json'))),settings);
   ok(run(a,['--rollback']));assert.equal(git('rev-parse','HEAD'),stable);ok(status());
-  assert.doesNotMatch(log(),/titlebars (setup|disable)/);
+  assert.doesNotMatch(log(),/titlebars setup/);
+  assert.ok(log().lastIndexOf('dev-a familiar-desktop titlebars disable') < log().lastIndexOf('stable familiar-desktop desktop restore'));
   assert.equal(fs.readFileSync(officialLibrary,'utf8'),'official');
   // Pre-guard sources cannot be installed over an official-package session.
   const unsafe=bundle(legacy,'unsafe');write(env.CALLS,'');

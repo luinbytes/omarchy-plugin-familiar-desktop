@@ -877,7 +877,7 @@ fn official_controls_execute_against_real_core_configuration() {
     official(&f);
     let source = f.paths.source.join("backend/src/titlebars.rs");
     fs::create_dir_all(source.parent().unwrap()).unwrap();
-    fs::write(source, "// Familiar official-titlebar controls v2").unwrap();
+    fs::write(&source, "// Familiar official-titlebar controls v2").unwrap();
     let fixtures = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../tests/fixtures/titlebars");
     for style in ["mac", "windows"] {
         let args = Args {
@@ -904,7 +904,17 @@ fn official_controls_execute_against_real_core_configuration() {
             "core-error",
             "late",
             "conflict",
+            "old-source",
         ] {
+            fs::write(
+                &source,
+                if scenario == "old-source" {
+                    "// old source"
+                } else {
+                    "// Familiar official-titlebar controls v2"
+                },
+            )
+            .unwrap();
             let output = std::process::Command::new("lua")
                 .arg(fixtures.join("exercise.lua"))
                 .arg(&generated)
