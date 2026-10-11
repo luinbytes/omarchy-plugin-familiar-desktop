@@ -124,6 +124,7 @@ hyprctl -j clients | jq -e --arg b "$b" '.[] | select(.address == $b) | {at, siz
 
 # CLI-loaded plugins survive when config stops asking for them. Load before
 # Core requests it so the test cannot pass just because Core unloaded the .so.
+"$helper" titlebars migrate | tee "$EVIDENCE/native-retained-migrate.json" | jq -e '.state == "ready"'
 "$helper" titlebars apply --mode mac --owner 300-retained | jq -e '.state == "configured"'
 hyprctl plugin load /usr/lib/omarchy-hyprland-titlebars/titlebars.so
 renderer_loaded() { hyprctl -j plugin list | jq -e 'length == 1 and .[0].name == "hyprbars"' >/dev/null; }
