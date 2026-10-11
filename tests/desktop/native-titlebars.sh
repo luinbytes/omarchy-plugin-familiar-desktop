@@ -112,4 +112,50 @@ hyprctl reload
 unloaded() { hyprctl -j plugin list | jq -e 'length == 0' >/dev/null; }
 wait_for unloaded
 hyprctl -j configerrors | jq -e 'all(.[]; . == "")'
-echo 'PASS: official renderer, Core floating scope, Mac/Windows pointer controls, targeted actions, restore, reload, disable and removal.'
+# Exercise the production installer on an enabled, unfinished v0.1.5 checkout.
+# The renderer checks above intentionally run without the shell's controller;
+# these lifecycle checks now use the real shell and retain Core's native library.
+phase=native-initial-shell
+baseline=439f97480bb0803f32137dcb700fbb939dc959ff
+plugin_id=io.github.tcballard.familiar-desktop
+state="$HOME/.local/state/familiar-desktop"
+rm -f "$helper"
+git -C "$plugin" fetch --depth 1 https://github.com/tcballard/omarchy-plugin-familiar-desktop.git "$baseline"
+git -C "$plugin" checkout --detach "$baseline"
+node "$SMOKE_ROOT/tests/desktop/configure.cjs" "$OMARCHY_PATH" "$HOME"
+ln -s "$OMARCHY_PATH/themes/tokyo-night" "$HOME/.config/omarchy/current/theme"
+omarchy-launch-shell > "$EVIDENCE/shell-launcher.log" 2>&1 &
+shell_ready() { [[ $(timeout 3 omarchy-shell shell ping 2>/dev/null) == ok ]]; }
+familiar_ready() { [[ $(timeout 3 omarchy-shell "$plugin_id" ping 2>/dev/null) == ok ]]; }
+wait_for shell_ready
+omarchy-shell shell rescanPlugins
+wait_for omarchy plugin enable "$plugin_id"
+wait_for familiar_ready
+cp "$HOME/.config/omarchy/shell.json" "$EVIDENCE/native-before-initial-shell.json"
+phase=native-initial-staging
+bash "$bundle/install-dev.sh" --initial
+[[ $(git -C "$plugin" rev-parse HEAD) == "$SOURCE_SHA" ]]
+[[ -f "$state/setup-pending" && ! -e "$plugin/bin/hyprbars" ]]
+diff -u <(jq -S . "$EVIDENCE/native-before-initial-shell.json") <(jq -S . "$HOME/.config/omarchy/shell.json")
+wait_for familiar_ready
+if bash "$plugin/setup-in-app.sh" status; then echo 'Initial setup must remain pending'; exit 1; fi
+# Use the real setup entry point; this does not claim a graphical wizard click.
+bash "$plugin/setup-in-app.sh" install mac
+bash "$plugin/setup-in-app.sh" status
+[[ ! -e "$plugin/bin/hyprbars" ]]
+phase=native-initial-rollback
+omarchy plugin disable "$plugin_id"
+omarchy restart shell
+"$helper" titlebars migrate | jq -e '.state == "ready"'
+echo 'o.workspace_mode({ default = "floating" })' > "$HOME/.local/state/omarchy/workspace-layouts/default.lua"
+hyprctl reload
+"$helper" titlebars apply --mode mac --owner 300-rollback | jq -e '.state == "configured"'
+wait_for native_ready
+bash "$bundle/install-dev.sh" --rollback
+[[ $(git -C "$plugin" rev-parse HEAD) == "$baseline" ]]
+[[ ! -e "$helper" && ! -e "$state/dev-build.json" && ! -e "$plugin/bin/hyprbars" ]]
+jq -e --arg id "$plugin_id" '.disabledPlugins | index($id) != null' "$HOME/.config/omarchy/shell.json"
+hyprctl eval "assert(familiar_titlebars == nil and hl.get_config('plugin.hyprbars.bar_height') == 30)" | grep -Fxq ok
+test -f /usr/lib/omarchy-hyprland-titlebars/titlebars.so
+hyprctl -j configerrors | jq -e 'all(.[]; . == "")'
+echo 'PASS: official renderer, Core floating scope, Mac/Windows pointer controls, targeted actions, restore, reload, disable/removal, initial staging/setup and disabled-state rollback.'

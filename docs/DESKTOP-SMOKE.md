@@ -29,6 +29,11 @@ It is an additional CI check; the existing portable tests remain independent.
   and capture a screenshot.
 - Roll back with the production installer, checking the previous source identity,
   removal of the development receipt and live Familiar/window recovery.
+- On the official-renderer case, also start the real shell with an enabled,
+  unfinished v0.1.5 installation, stage with `--initial`, finish through the production
+  setup entry point, and roll back active native controls to the prior unfinished
+  source. Check placement, a later disabled state, Core defaults and the absence
+  of any private library. The graphical wizard itself is not clicked.
 
 The stable bootstrap is a test fixture, not a test of the graphical setup wizard.
 This first smoke does not click Dock icons, inspect hover-preview pixels, trigger

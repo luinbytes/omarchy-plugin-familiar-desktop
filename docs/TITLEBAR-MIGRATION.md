@@ -4,6 +4,12 @@ On `dev/v0.1.6`, Familiar's Mac/Windows controls use Omarchy's official renderer
 This supersedes the earlier native-only handoff which left those styles inactive.
 No release or desktop acceptance is implied.
 
+`integration/v0.1.6-arm-titlebars` combines this work with k-kostin's native ARM
+development contribution (#85). Local official-host builds contain only the
+architecture-matched Familiar backend. Private-host builds still need a matching
+library/ABI pair. This provides local ARM development and first-run setup, not
+ordinary prebuilt ARM release installation. See [development setup](DEVELOPMENT.md).
+
 ## What changes
 
 In **Windows → Window controls**, choose **Use Familiar controls**, then Mac,
