@@ -30,29 +30,29 @@ const version=JSON.parse(read('manifest.json')).version;
 if(!/^\d+\.\d+\.\d+$/.test(version)||options.tag!==`v${version}`)fail(`Tag ${options.tag} does not match manifest.json version ${version}`);
 // Rebuild the exact URLs onboarding constructs; a stale installer release pin
 // would download a different release than the one being checked.
-const required=new Set();
 for(const installer of ['install-backend.sh','install-titlebars.sh']){
   const source=read(installer);
   const base=/^\s*base="([^"]+)"/m.exec(source);
   if(!base || base[1]!==`https://github.com/${options.repo}/releases/download/$release`)
     fail(`${installer} download base differs from the public URL being checked`);
-  if(installer==='install-titlebars.sh' && !source.includes('asset="hyprbars-linux-x86_64-$abi.so"'))
-    fail('install-titlebars.sh asset pattern differs from the public URL being checked');
+  const pattern=installer==='install-titlebars.sh' ? 'asset="hyprbars-linux-$architecture-$abi.so"' : 'asset="familiar-desktop-linux-$architecture"';
+  if(!source.includes(pattern))fail(`${installer} asset pattern differs from the public URL being checked`);
   const match=/^\s*(?:local )?release='([^']+)'/m.exec(source);
   if(!match)fail(`${installer} does not declare a release`);
   if(match[1]!==options.tag)fail(`${installer} downloads ${match[1]}, not ${options.tag}; onboarding would fetch a different release than the one being published`);
-  if(installer==='install-backend.sh'){
-    const asset=/^\s*asset='([^']+)'/m.exec(source);
-    if(!asset)fail(`${installer} does not declare its download asset`);
-    required.add(asset[1]);
-  }else{
-    const abi=/^\s*(?:local )?expected_abi='([^']+)'/m.exec(source);
-    if(!abi)fail(`${installer} does not declare a Hyprland ABI`);
-    required.add(`hyprbars-linux-x86_64-${abi[1]}.so`);
-  }
 }
-// Every URL an installer will request must carry a reviewed digest.
-for(const name of required)if(!pins.has(name))fail(`release-binaries.sha256 has no reviewed digest for ${name}, which onboarding downloads`);
+// Source pins now define the architecture/ABI support set. Every published target
+// needs both assets; an unpinned desktop is refused before onboarding downloads.
+const architectures=new Set();
+for(const name of pins.keys()){
+  const match=/^(?:familiar-desktop-linux-(x86_64|aarch64)|hyprbars-linux-(x86_64|aarch64)-[a-zA-Z0-9_.-]+\.so)$/.exec(name);
+  if(!match)fail(`Unsupported reviewed source digest asset: ${name}`);
+  architectures.add(match[1]||match[2]);
+}
+for(const architecture of architectures){
+  if(!pins.has(`familiar-desktop-linux-${architecture}`)||![...pins.keys()].some(n=>n.startsWith(`hyprbars-linux-${architecture}-`)))
+    fail(`release-binaries.sha256 has no reviewed digest for a complete Linux ${architecture} backend/window-controls pair`);
+}
 const temp=fs.mkdtempSync(path.join(os.tmpdir(),'familiar-smoke-'));
 try{
   let verified=0;
@@ -63,7 +63,8 @@ try{
     if(download.status!==0)fail(`Download failed (exit ${download.status}): ${url}\n${download.stderr||'The release asset is missing; publish it before onboarding can use it.'}`);
     const digest=crypto.createHash('sha256').update(fs.readFileSync(destination)).digest('hex');
     if(digest!==pins.get(name))fail(`Checksum mismatch for ${url}\nExpected ${pins.get(name)} (reviewed pin)\nDownloaded ${digest}`);
-    if(name==='familiar-desktop-linux-x86_64'){
+    const nativeArchitecture=process.arch==='arm64'?'aarch64':process.arch==='x64'?'x86_64':null;
+    if(name===`familiar-desktop-linux-${nativeArchitecture}`){
       fs.chmodSync(destination,0o755);
       const output=spawnSync(destination,['--version'],{encoding:'utf8',timeout:10000});
       if(output.status!==0||output.stdout.trim()!==`familiar-desktop ${version}`)fail(`Downloaded backend at ${url} reports '${(output.stdout+output.stderr).trim()}', expected 'familiar-desktop ${version}'`);

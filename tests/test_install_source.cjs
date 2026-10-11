@@ -3,7 +3,7 @@
 const fs=require('node:fs'), path=require('node:path'), os=require('node:os');
 const assert=require('node:assert/strict');
 const {spawnSync}=require('node:child_process');
-const realGit=spawnSync('which',['git'],{encoding:'utf8'}).stdout.trim();
+const realGit=spawnSync('bash',['-c','command -v git'],{encoding:'utf8'}).stdout.trim();
 const source=fs.readFileSync('install.sh','utf8');
 const root=fs.mkdtempSync(path.join(os.tmpdir(),'familiar-source-pin-'));
 function git(args,cwd){const r=spawnSync(realGit,args,{cwd,encoding:'utf8'});assert.equal(r.status,0,r.stderr);return r.stdout.trim();}
@@ -25,6 +25,7 @@ try {
   const plugin=path.join(home,'.config/omarchy/plugins/io.github.tcballard.familiar-desktop');
   if(existing){fs.mkdirSync(path.dirname(plugin),{recursive:true});git(['clone',remote,plugin],home);git(['checkout','--detach',pin],plugin);}
   const tools=path.join(home,'tools');fs.mkdirSync(tools);const log=path.join(home,'events');
+  write(path.join(tools,'uname'),'#!/bin/bash\nif [[ "$1" == -m ]]; then echo x86_64; else echo Linux; fi\n');
   write(path.join(tools,'hyprctl'),"#!/bin/bash\necho 'Version ABI string: efb50993780079460b0cbed1363e2166a2de1d9f_aq_0.15_hu_0.14_hg_0.5_hc_0.1_hlg_0.6'\n");
   write(path.join(tools,'omarchy-shell'),'#!/bin/bash\nexit 0\n');
   write(path.join(tools,'omarchy'),`#!/bin/bash\necho "omarchy $*" >> "$LOG"\nif [[ "$1 $2" == 'plugin add' ]]; then\n test "$("$REAL_GIT" -C "$3" rev-parse HEAD)" = "$PIN" || exit 97\n mkdir -p "$(dirname "$PLUGIN")"\n "$REAL_GIT" clone -- "$3" "$PLUGIN"\nfi\n`);

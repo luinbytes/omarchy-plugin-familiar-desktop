@@ -28,5 +28,29 @@ try {
  manifest.source.commit='b'.repeat(40);metadata();assert.notEqual(run('source-mismatch').status,0);
  manifest.source.commit=sha;metadata();fs.appendFileSync(path.join(dir,assets[0]),'corrupt');assert.notEqual(run('transport').status,0);
  metadata();assert.notEqual(run('manifest-mismatch').status,0);
+ // ARM bundles must contain a matching pair, never mixed CPU architectures.
+ fs.writeFileSync(path.join(dir,assets[0]),assets[0]);
+ const armAssets=['familiar-desktop-linux-aarch64','hyprbars-linux-aarch64-fixture.so'];
+ for(const name of armAssets)fs.writeFileSync(path.join(dir,name),name);
+ manifest.artifacts=armAssets.map(name=>({name,sha256:digest(name)}));metadata();
+ let arm=run('arm');assert.equal(arm.status,0,arm.stderr);
+ const armReceipt=JSON.parse(fs.readFileSync(path.join(temp,'arm/DEV-BUILD.json')));
+ assert.equal(armReceipt.architecture,'aarch64');assert.equal(armReceipt.abi,'fixture');
+ manifest.artifacts[1]={name:assets[1],sha256:digest(assets[1])};metadata();assert.notEqual(run('mixed').status,0);
+ // Local builds record their own provenance and never invent a CI run.
+ const source=path.join(temp,'local-source');fs.mkdirSync(source);
+ for(const name of ['scripts/install-dev.sh','docs/DEVELOPMENT.md']) {
+   fs.mkdirSync(path.dirname(path.join(source,name)),{recursive:true});fs.copyFileSync(name,path.join(source,name));
+ }
+ execFileSync('git',['init','-q',source]);execFileSync('git',['-C',source,'add','.']);
+ execFileSync('git',['-C',source,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-qm','local source']);
+ manifest.source.commit=execFileSync('git',['-C',source,'rev-parse','HEAD'],{encoding:'utf8'}).trim();
+ manifest.artifacts=armAssets.map(name=>({name,sha256:digest(name)}));metadata();
+ const localRun=label=>spawnSync(process.execPath,[path.resolve('scripts/prepare-dev-bundle.cjs'),'--local',input,path.join(temp,label)],{cwd:source,encoding:'utf8'});
+ let local=localRun('local');assert.equal(local.status,0,local.stderr);
+ const localReceipt=JSON.parse(fs.readFileSync(path.join(temp,'local/DEV-BUILD.json')));
+ assert.equal(localReceipt.buildKind,'local');assert.equal(localReceipt.commit,manifest.source.commit);
+ assert.equal(localReceipt.runId,undefined);assert.equal(localReceipt.runAttempt,undefined);
+ fs.writeFileSync(path.join(source,'dirty'),'local edit');assert.notEqual(localRun('dirty-local').status,0);
  console.log('Development packaging passed: exact source/run, checksums, receipt, mismatched source and corrupt assets.');
 } finally {fs.rmSync(temp,{recursive:true,force:true});}

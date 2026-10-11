@@ -8,10 +8,12 @@ node tests/test_dock_opacity.cjs
 node tests/test_uninstall.cjs
 
 node tests/test_install.cjs
+node tests/test_arm_assets.cjs
 node tests/test_install_source.cjs
 
 node tests/test_candidate_install.cjs
 node tests/test_dev_install.cjs
+node tests/test_dev_install.cjs --arm
 node tests/test_dev_bundle.cjs
 node tests/test_release_tag.cjs
 node tests/test_release_smoke.cjs
@@ -25,6 +27,7 @@ node tests/test_dock_scroll.cjs
 node tests/test_dock_drag.cjs
 
 node tests/test_in_app_setup.cjs
+node tests/test_in_app_setup.cjs --arm
 node tests/test_bar_placement.cjs
 node tests/test_app_identity.cjs
 node tests/test_desktop_catalog.cjs

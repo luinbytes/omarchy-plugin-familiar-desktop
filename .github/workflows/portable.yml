@@ -6,8 +6,17 @@ on:
 permissions:
   contents: read
 jobs:
-  test:
-    runs-on: ubuntu-latest
+  platforms:
+    name: Portable (${{ matrix.architecture }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            architecture: x86_64
+          - runner: ubuntu-24.04-arm
+            architecture: aarch64
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -32,11 +41,21 @@ jobs:
       - run: ./build.sh
       - uses: actions/upload-artifact@v4
         with:
-          name: familiar-desktop-linux-x86_64
+          name: familiar-desktop-linux-${{ matrix.architecture }}
           path: bin/familiar-desktop
       - name: Upload setup preview
         uses: actions/upload-artifact@v4
         with:
-          name: familiar-setup-preview
+          name: familiar-setup-preview-${{ matrix.architecture }}
           path: /tmp/familiar-setup-preview.png
           if-no-files-found: error
+  # Keep the existing required status-check context for stable-main rulesets.
+  test:
+    needs: platforms
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require both architectures to pass
+        env:
+          PLATFORM_RESULT: ${{ needs.platforms.result }}
+        run: test "$PLATFORM_RESULT" = success

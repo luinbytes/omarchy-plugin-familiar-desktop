@@ -42,6 +42,12 @@ Broader monitor, scaling and app coverage remains open; marketplace re-review is
 
 Window controls also download as a checksum-verified prebuilt Hyprbars library. The initial supported target is Linux x86_64, Hyprland 0.56.2 commit `efb50993780079460b0cbed1363e2166a2de1d9f`, ABI `efb50993780079460b0cbed1363e2166a2de1d9f_aq_0.15_hu_0.14_hg_0.5_hc_0.1_hlg_0.6`. Unsupported ABIs stop before backend installation or title-bar configuration. The normal installer never runs Hyprpm, clones Hyprland, or installs a compiler. Missing assets, checksum failures and loader failures stop setup; they never trigger a source build. Existing Hyprbars ownership protections still apply.
 
+ARM (Linux aarch64) contributors can build and test a source-bound native
+development bundle on their desktop, including first-run setup and rollback.
+See [native ARM development](docs/DEVELOPMENT.md#native-arm-development-on-the-target-desktop).
+The current stable release still publishes x86_64 binaries only; ARM release
+assets and reviewed checksums require a separate maintainer release.
+
 For a fresh installation, the installer fetches the pinned release commit into a temporary local repository and verifies its identity before passing that checkout to `omarchy plugin add`. It then verifies the registered checkout and completes setup before enabling Familiar. You do not need to run registration separately.
 
 The shared `bin/familiar-desktop` Rust binary handles window actions, title-bar setup, theme parsing, app/icon scans and badge writes. Downloads happen during explicit setup, either in Familiar or through the standalone terminal installer. Familiar never compiles code on your desktop. Its setup screen launches the bundled download scripts only after your explicit setup action.

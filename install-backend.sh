@@ -7,11 +7,11 @@ main() {
   root_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
   [[ "$(uname -s)" == Linux ]] || { echo 'Familiar requires Linux.' >&2; return 1; }
   architecture="$(uname -m)"
-  [[ "$architecture" == x86_64 ]] || { echo "No Familiar $release binary for $architecture. Supported: Linux x86_64." >&2; return 1; }
+  case "$architecture" in x86_64|aarch64) ;; *) echo "Unsupported Linux architecture: $architecture." >&2; return 1;; esac
   for tool in curl sha256sum; do
     command -v "$tool" >/dev/null || { echo "Missing $tool; install curl and coreutils." >&2; return 1; }
   done
-  asset='familiar-desktop-linux-x86_64'
+  asset="familiar-desktop-linux-$architecture"
   base="https://github.com/tcballard/omarchy-plugin-familiar-desktop/releases/download/$release"
   mkdir -p "$root_dir/bin"
   backend_staging="$(mktemp -d "$root_dir/bin/.download.XXXXXX")"

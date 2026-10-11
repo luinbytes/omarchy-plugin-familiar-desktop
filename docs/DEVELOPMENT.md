@@ -92,6 +92,61 @@ for a clean matching checkout. In-app release repair is unavailable during dev
 testing; use this installer to update or roll back. Do not run the normal plugin
 updater during a development test; moving the source invalidates its receipt.
 
+## Native ARM development on the target desktop
+
+The stable v0.1.5 release publishes x86_64 assets only. Adding ARM support to
+source does not publish ARM assets or authorize a release. The standalone stable
+recovery installer and release build/tag pipeline remain x86_64. ARM users can
+test an explicit local development bundle instead; the setup UI never compiles
+or installs system packages. Portable CI checks both x86_64 and aarch64.
+
+On the target Linux aarch64 desktop, install the contributor dependencies above,
+plus Git, make, pkg-config, readelf, Glaze and the installed Hyprland development
+headers/dependencies. Commit the feature branch before building. From that clean
+checkout, run:
+
+```bash
+bash scripts/build-local-dev.sh "$HOME/familiar-arm-build"
+cat "$HOME/familiar-arm-build/DEV-BUILD.json"
+FAMILIAR_SOURCE_REPOSITORY="$PWD" \
+  bash "$HOME/familiar-arm-build/install-dev.sh" --initial
+```
+
+The native backend uses the target desktop's GNU toolchain and shared-library
+environment; this is not a portable static release binary. Hyprbars uses the
+same pinned upstream commit and vector-controls patch as release builds. Its
+build probes the real installed headers and refuses a header ABI different from
+the running compositor. The bundle contains exactly one architecture/ABI pair,
+SHA-256 checksums, build environment evidence and a receipt bound to the exact
+source commit. Local receipts say `buildKind: local` with a build timestamp;
+they never invent a GitHub run or XPS acceptance record. Keep the bundle and its
+build evidence for review. The explicit source repository override permits a
+local checkout or contributor fork; the fetched commit must still match exactly.
+
+`--initial` is only for an installed Git plugin with no native binaries or
+titlebar ownership, including setup that previously stopped at the x86_64 check.
+It preserves personal preferences, snapshots the unfinished setup and stages
+verified native binaries. Open Familiar and start setup to choose Mac or Windows
+controls. Setup verifies source and bytes again and performs its normal guarded
+configuration transaction without release downloads. Retry uses those same
+verified development bytes. Once ready, development repair remains through the
+bundle installer. For later development updates use `install-dev.sh` without
+`--initial`, then test the new exact build again.
+
+Rollback uses `bash "$HOME/familiar-arm-build/install-dev.sh" --rollback` (or
+the explicit snapshot path printed at install). An initial rollback removes the
+owned hook through the verified helper, restores the previous source and pending
+markers, and removes staged binaries/receipt; personal settings remain. An
+interrupted stage without a receipt can be rolled back only when no hook was
+activated and any partial bytes match the original bundle. Corrupt installed
+bytes stop rollback rather than being executed.
+
+Test setup/retry, both control styles, dock/window actions, config errors and
+rollback on the ARM desktop. This evidence complements the required maintainer
+XPS acceptance and merge authorization in [WORKFLOW.md](WORKFLOW.md); it does not
+replace them. Stable ARM publication still needs a separately authorized binary
+build/release path and reviewed source-bound pins for each supported ABI.
+
 ## Roll back
 
 Keep the bundle directory. From it:

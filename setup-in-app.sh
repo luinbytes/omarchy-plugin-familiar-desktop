@@ -8,7 +8,11 @@ style="${2:-windows}"
 [[ "$style" == windows || "$style" == mac ]] || exit 2
 state="${XDG_STATE_HOME:-$HOME/.local/state}/familiar-desktop"
 config="${XDG_CONFIG_HOME:-$HOME/.config}"
-abi='efb50993780079460b0cbed1363e2166a2de1d9f_aq_0.15_hu_0.14_hg_0.5_hc_0.1_hlg_0.6'
+architecture="$(uname -m)"
+abi="$(hyprctl version | sed -n 's/^Version ABI string: //p')"
+[[ "$(uname -s)" == Linux && ( "$architecture" == x86_64 || "$architecture" == aarch64 ) && "$abi" =~ ^[a-zA-Z0-9_.-]+$ ]] || { echo 'Unsupported desktop or missing Hyprland ABI.'; exit 3; }
+backend_asset="familiar-desktop-linux-$architecture"
+titlebars_asset="hyprbars-linux-$architecture-$abi.so"
 library="$root/bin/hyprbars/$abi/hyprbars.so"
 helper="$root/bin/familiar-desktop"
 official_library=/usr/lib/omarchy-hyprland-titlebars/titlebars.so
@@ -41,12 +45,12 @@ verified() {
 }
 ready() {
   [[ ! -e "$state/setup-pending" && -x "$helper" ]] || return 1
-  verified "$helper" familiar-desktop-linux-x86_64 || return 1
+  verified "$helper" "$backend_asset" || return 1
   # Core owns the package and its ABI. The dock/setup need only our helper;
   # the controls page provides an explicit handoff for an existing private hook.
   [[ ! -f "$official_library" ]] || return 0
   if jq -e '.backend == "omarchy"' "$config/omarchy/familiar-titlebars/owner.json" >/dev/null 2>&1; then return 0; fi
-  verified "$library" "hyprbars-linux-x86_64-$abi.so" || return 1
+  verified "$library" "$titlebars_asset" || return 1
   jq -e --arg source "$root" --arg library "$library" '.source == $source and .library == $library and .hookVersion == 2' "$config/omarchy/familiar-titlebars/owner.json" >/dev/null 2>&1 || return 1
   grep -qF -- '-- BEGIN Familiar Desktop title bars' "$config/hypr/looknfeel.lua" 2>/dev/null
 }
@@ -58,9 +62,17 @@ if [[ "$mode" == status ]]; then
   echo 'Set up Familiar to enable the dock and window controls.'
   exit 3
 fi
+development=false
 if [[ -e "$state/dev-build.json" ]]; then
-  echo 'Development build installed. Use its install-dev.sh to update or roll back; in-app release repair is disabled.'
-  exit 1
+  if ! verified "$helper" "$backend_asset" ||
+      { [[ ! -f "$official_library" ]] && ! verified "$library" "$titlebars_asset"; }; then
+    echo 'Development bytes or source do not match their receipt; reinstall the development bundle.'; exit 1
+  fi
+  if [[ ! -e "$state/setup-pending" ]]; then
+    echo 'Development build installed. Use its install-dev.sh to update or roll back; in-app release repair is disabled.'
+    exit 1
+  fi
+  development=true
 fi
 for tool in curl git hyprctl; do
   command -v "$tool" >/dev/null || { echo "Required system tool is missing: $tool. Update Omarchy and retry."; exit 1; }
@@ -76,7 +88,7 @@ finish() {
     echo 'Setup could not finish. Your personal settings have been kept. Retry below.'
     tail -c 2400 "$log"
     printf '\n'
-    if verified "$helper" familiar-desktop-linux-x86_64 && [[ -x "$helper" ]]; then
+    if verified "$helper" "$backend_asset" && [[ -x "$helper" ]]; then
       timeout --foreground --kill-after=2 15 "$helper" titlebars disable >/dev/null 2>&1 || true
     fi
   fi
@@ -90,17 +102,19 @@ familiar_prepare_bar_placement
 # A persisted incomplete marker survives shell restart and prevents partial activation.
 printf 'pending\n' > "$state/setup-pending"
 echo 'Checking your desktop…'
-if [[ ! -f "$official_library" ]]; then
+if [[ "$development" == false && ! -f "$official_library" ]]; then
   timeout --foreground --kill-after=5 30 bash "$root/install-titlebars.sh" --check >"$log" 2>&1
 fi
 # Only execute an existing backend after checking it against the reviewed source.
-if verified "$helper" familiar-desktop-linux-x86_64 && [[ -x "$helper" ]]; then
+if verified "$helper" "$backend_asset" && [[ -x "$helper" ]]; then
   timeout --foreground --kill-after=5 30 "$helper" desktop restore >"$log" 2>&1
   timeout --foreground --kill-after=5 30 "$helper" titlebars disable >"$log" 2>&1
 fi
-echo 'Downloading and verifying the Familiar backend…'
-timeout --foreground --kill-after=5 240 bash "$root/install-backend.sh" >"$log" 2>&1
-verified "$helper" familiar-desktop-linux-x86_64
+if [[ "$development" == false ]]; then
+  echo 'Downloading and verifying the Familiar backend…'
+  timeout --foreground --kill-after=5 240 bash "$root/install-backend.sh" >"$log" 2>&1
+fi
+verified "$helper" "$backend_asset"
 if [[ -f "$official_library" ]]; then
   # Selection is made on the controls page; setup never assumes style consent.
   rm -f "$state/setup-pending"
@@ -109,10 +123,11 @@ if [[ -f "$official_library" ]]; then
   echo 'Familiar is ready. Choose Use Familiar controls in Window controls.'
   exit 0
 fi
-echo 'Downloading and verifying window controls…'
-timeout --foreground --kill-after=5 240 bash "$root/install-titlebars.sh" >"$log" 2>&1
-verified "$helper" familiar-desktop-linux-x86_64
-verified "$library" "hyprbars-linux-x86_64-$abi.so"
+if [[ "$development" == false ]]; then
+  echo 'Downloading and verifying window controls…'
+  timeout --foreground --kill-after=5 240 bash "$root/install-titlebars.sh" >"$log" 2>&1
+fi
+verified "$library" "$titlebars_asset"
 echo 'Setting up your window controls…'
 timeout --foreground --kill-after=5 40 "$helper" titlebars setup --library "$library" --enable --style "$style" >"$log" 2>&1
 jq -e '.state == "ready"' "$log" >/dev/null

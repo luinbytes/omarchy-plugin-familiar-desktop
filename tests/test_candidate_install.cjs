@@ -14,6 +14,7 @@ function run(fault='', existing=true) {
   const bundle=path.join(root,'bundle');const tools=path.join(root,'tools');
   const plugin=path.join(root,'.config/omarchy/plugins/io.github.tcballard.familiar-desktop');
   fs.mkdirSync(bundle);fs.mkdirSync(tools);
+  fs.writeFileSync(path.join(tools,'uname'),'#!/bin/bash\nif [[ "$1" == -m ]]; then echo x86_64; else echo Linux; fi\n',{mode:0o755});
   if(existing)fs.mkdirSync(path.join(plugin, fault==='unmanaged'?'other':'.git'),{recursive:true});
   fs.copyFileSync('bar-placement.sh',path.join(root,'bar-placement.sh'));
   if(existing)fs.copyFileSync('bar-placement.sh',path.join(plugin,'bar-placement.sh'));
