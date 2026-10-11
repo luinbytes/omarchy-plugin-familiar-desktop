@@ -25,7 +25,14 @@ jobs:
             archive: 2026/10/09
             qt: 6.12.0
             quickshell: 0.3.2
+          # Exercise the official renderer and the actual Core configuration.
+          - omarchy: 14987189695a8ae1f2270262fdf77446fafb1ba3
+            archive: 2026/10/11
+            qt: 6.12.0
+            quickshell: 0.3.2
+            native_titlebars: true
     env:
+      NATIVE_TITLEBARS: ${{ matrix.native_titlebars && '1' || '0' }}
       SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       OMARCHY_SHA: ${{ matrix.omarchy }}
       ARCH_SNAPSHOT: ${{ matrix.archive || '2026/09/30' }}

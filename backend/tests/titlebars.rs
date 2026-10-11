@@ -47,6 +47,9 @@ impl Hypr for Fake {
         if args.first() == Some(&"eval") && !self.probe_ok {
             return Ok("error: missing Lua support".into());
         }
+        if args == ["-j", "configerrors"] {
+            return Ok(json!([self.errors]).to_string());
+        }
         if args == ["configerrors"] {
             return Ok(self.errors.clone());
         }
@@ -746,7 +749,7 @@ fn official(f: &Fixture) {
 }
 
 #[test]
-fn official_handoff_keeps_preferences_and_never_mutates_the_compositor() {
+fn official_migration_keeps_preferences_and_reconciles_after_restart() {
     let mut f = Fixture::new();
     f.setup().unwrap();
     f.apply().unwrap();
@@ -769,15 +772,12 @@ fn official_handoff_keeps_preferences_and_never_mutates_the_compositor() {
     assert_eq!(common::read_json(&prefs).unwrap()["dockEnabled"], false);
     assert_eq!(f.apply().unwrap()["state"], "restart-required");
     f.paths.compositor_session = "session-after".into();
-    assert_eq!(f.apply().unwrap()["state"], "managed");
+    assert_eq!(f.apply().unwrap()["state"], "configured");
+    assert!(f.generated().contains("familiar_configure"));
+    assert!(!f.generated().contains("hl.plugin.load("));
     f.args.operation = "disable".into();
     assert_eq!(f.apply().unwrap()["state"], "managed");
-    assert!(
-        f.hypr
-            .calls
-            .iter()
-            .all(|c| c[0] == "eval" && c[1].starts_with("assert("))
-    );
+    assert!(f.hypr.calls.iter().all(|c| c[0] != "plugin"));
     assert!(f.setup().unwrap_err().contains("will not recreate"));
     titlebars::remove(&f.paths, &mut f.hypr).unwrap();
     assert_eq!(fs::read_to_string(&f.paths.config).unwrap(), f.original);
@@ -798,8 +798,13 @@ fn fresh_official_handoff_needs_core_but_does_not_require_private_assets() {
         "core-required"
     );
     f.hypr.probe_ok = true;
-    assert_eq!(f.apply().unwrap()["state"], "managed");
-    assert_eq!(fs::read_to_string(&f.paths.config).unwrap(), f.original);
+    assert_eq!(f.apply().unwrap()["state"], "configured");
+    assert_eq!(
+        titlebars::strip_hook(&fs::read_to_string(&f.paths.config).unwrap())
+            .unwrap()
+            .trim_end(),
+        f.original.trim_end()
+    );
     // Core may have no floating workspace, hence no loaded titlebars. This is
     // delegation, not a claim that a backend is loaded or controls are visible.
     assert!(!f.hypr.loaded);
@@ -837,7 +842,7 @@ fn interrupted_handoff_is_retryable_and_never_restores_the_fork() {
     f.paths.compositor_session = "session-after".into();
     assert_eq!(
         titlebars::migrate(&f.paths, &mut f.hypr).unwrap()["state"],
-        "managed"
+        "ready"
     );
 }
 
@@ -864,4 +869,113 @@ fn migration_rejects_edited_hook_foreign_owner_and_unknown_session() {
         fs::read(f.paths.directory.join("owner.json")).unwrap(),
         before
     );
+}
+
+#[test]
+fn official_controls_execute_against_real_core_configuration() {
+    let f = Fixture::new();
+    official(&f);
+    let source = f.paths.source.join("backend/src/titlebars.rs");
+    fs::create_dir_all(source.parent().unwrap()).unwrap();
+    fs::write(source, "// Familiar official-titlebar controls v2").unwrap();
+    let fixtures = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../tests/fixtures/titlebars");
+    for style in ["mac", "windows"] {
+        let args = Args {
+            style: style.into(),
+            size: "large".into(),
+            font_family: "Test Font".into(),
+            background: "#abcdef".into(),
+            foreground: "#121212".into(),
+            exclude: "org.app+name".into(),
+            ..Args::default()
+        };
+        let policy = titlebars::theme_policy(&json!({}), &args).unwrap();
+        let generated = f.paths.directory.join("official.lua");
+        fs::write(
+            &generated,
+            titlebars::render_official(&f.paths, &policy).unwrap(),
+        )
+        .unwrap();
+        for scenario in [
+            "floating",
+            "tiled",
+            "first-load",
+            "changed-core",
+            "core-error",
+            "late",
+            "conflict",
+        ] {
+            let output = std::process::Command::new("lua")
+                .arg(fixtures.join("exercise.lua"))
+                .arg(&generated)
+                .arg(fixtures.join("workspace-modes.lua"))
+                .args([style, scenario])
+                .output()
+                .expect("Lua is required to test the Core adapter");
+            assert!(
+                output.status.success(),
+                "{style}/{scenario}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+    }
+}
+
+#[test]
+fn official_reconcile_is_idempotent_and_stale_teardown_cannot_reset_controls() {
+    let mut f = Fixture::new();
+    official(&f);
+    titlebars::migrate(&f.paths, &mut f.hypr).unwrap();
+    f.apply().unwrap();
+    let generated = f.generated();
+    f.hypr.calls.clear();
+    f.apply().unwrap();
+    assert!(!f.hypr.calls.iter().any(|c| c[0] == "reload"));
+    f.args.operation = "disable".into();
+    f.args.if_owner = true;
+    f.args.owner = "100-old".into();
+    f.apply().unwrap();
+    assert_eq!(f.generated(), generated);
+    f.args.owner = "200-new".into();
+    f.apply().unwrap();
+    assert!(!f.generated().contains("familiar_configure"));
+    assert!(f.hypr.calls.iter().all(|c| c[0] != "plugin"));
+}
+
+#[test]
+fn official_failed_reload_restores_previous_generated_controls() {
+    let mut f = Fixture::new();
+    official(&f);
+    titlebars::migrate(&f.paths, &mut f.hypr).unwrap();
+    f.apply().unwrap();
+    let original = f.generated();
+    f.args.style = "windows".into();
+    f.hypr.fail_reload = true;
+    assert!(f.apply().is_err());
+    assert_eq!(f.generated(), original);
+}
+
+#[test]
+fn clicked_target_never_falls_back_to_the_newly_focused_window() {
+    let mut f = Fixture::new();
+    for action in ["close", "maximize"] {
+        f.hypr.calls.clear();
+        titlebars::window_action_at(action, "0xabc123", &mut f.hypr).unwrap();
+        assert_eq!(f.hypr.calls.len(), 1);
+        assert_eq!(f.hypr.calls[0][0], "dispatch");
+        assert!(f.hypr.calls[0][1].contains("address:0xabc123"));
+    }
+    for target in ["%WINDOW%", "0x1'; rm -rf x", "focused", "address:0x123"] {
+        f.hypr.calls.clear();
+        assert!(titlebars::window_action_at("minimize", target, &mut f.hypr).is_err());
+        assert!(f.hypr.calls.is_empty());
+    }
+    let args = Args::parse(&[
+        "action".into(),
+        "minimize".into(),
+        "--window".into(),
+        "0x123".into(),
+    ])
+    .unwrap();
+    assert_eq!(args.window, "0x123");
 }

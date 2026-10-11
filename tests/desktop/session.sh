@@ -46,6 +46,15 @@ hl.monitor({ output = "", mode = "1280x800@60", position = "auto", scale = 1 })
 hl.config({ general = { layout = "dwindle" }, animations = { enabled = false } })
 dofile(os.getenv("HOME") .. "/.config/hypr/looknfeel.lua")
 LUA
+if [[ ${NATIVE_TITLEBARS:-0} == 1 ]]; then
+  cat > "$HOME/.config/hypr/hyprland.lua" <<'LUA'
+dofile(os.getenv("OMARCHY_PATH") .. "/default/hypr/bootstrap.lua")
+hl.monitor({ output = "", mode = "1280x800@60", position = "auto", scale = 1 })
+hl.config({ general = { layout = "dwindle" }, animations = { enabled = false } })
+require("hypr.looknfeel")
+require("default.hypr.workspace-layouts")
+LUA
+fi
 phase=hyprland
 AQ_BACKENDS=drm HYPRLAND_ALLOW_SOFTWARE=1 \
   Hyprland --config "$HOME/.config/hypr/hyprland.lua" > "$EVIDENCE/hyprland.log" 2>&1 &
@@ -67,6 +76,11 @@ discover() {
 wait_for discover
 hyprctl version | tee "$EVIDENCE/hyprland-version.txt"
 hyprctl -j monitors > "$EVIDENCE/monitors.json"
+if [[ ${NATIVE_TITLEBARS:-0} == 1 ]]; then
+  source "$SMOKE_ROOT/tests/desktop/native-titlebars.sh"
+  phase=passed
+  exit 0
+fi
 # Disable unrelated first-party services; run the real shell and its real bar.
 node "$SMOKE_ROOT/tests/desktop/configure.cjs" "$OMARCHY_PATH" "$HOME"
 ln -s "$OMARCHY_PATH/themes/tokyo-night" "$HOME/.config/omarchy/current/theme"

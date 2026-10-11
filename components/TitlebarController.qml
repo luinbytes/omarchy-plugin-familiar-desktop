@@ -107,6 +107,7 @@ Item {
                 root.state = exitCode === 0 ? (result.state || "failed") : "failed"
                 if (exitCode === 0) root.backend = String(result.backend || "familiar")
                 root.message = String(result.message || "Window-control update failed.").slice(0, 300)
+                if (exitCode === 0 && adapter.command[2] === "migrate") root.schedule()
             } catch (error) {
                 root.state = "failed"
                 root.message = "Window-control helper failed. Build the Rust helper and check that hyprctl is installed."

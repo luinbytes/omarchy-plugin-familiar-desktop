@@ -106,7 +106,7 @@ if [[ -f "$official_library" ]]; then
   rm -f "$state/setup-pending"
   ready
   familiar_apply_bar_placement
-  echo 'Familiar is ready. Choose Use Omarchy controls in Window controls.'
+  echo 'Familiar is ready. Choose Use Familiar controls in Window controls.'
   exit 0
 fi
 echo 'Downloading and verifying window controls…'

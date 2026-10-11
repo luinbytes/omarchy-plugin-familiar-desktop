@@ -290,13 +290,12 @@ ColumnLayout {
             Layout.fillWidth: true
             wrapMode: Text.WordWrap
             textFormat: Text.PlainText
-            text: content.officialTitlebars ? "Use Omarchy’s controls on floating workspaces. Omarchy owns their appearance and buttons. Your Familiar styles stay saved; minimise is available from the dock." : "Title bars with close, minimise and maximise. Restore minimised windows from the dock."
+            text: content.officialTitlebars ? "Mac or Windows controls using Omarchy’s renderer on floating workspaces (Super+L). Close, minimise and maximise target the clicked window; restore from the dock. Choose Omarchy to restore its default controls." : "Title bars with close, minimise and maximise. Restore minimised windows from the dock."
             font.family: Style.font.family
             font.pixelSize: 11
             color: Commons.Color.popups.text
         }
         RowLayout {
-            visible: !content.officialTitlebars
             Layout.fillWidth: true
             Repeater {
                 model: [{
@@ -304,7 +303,7 @@ ColumnLayout {
                         "title": "Theme"
                     }, {
                         "key": "off",
-                        "title": "Off"
+                        "title": content.officialTitlebars ? "Omarchy" : "Off"
                     }, {
                         "key": "mac",
                         "title": "Mac"
@@ -358,7 +357,7 @@ ColumnLayout {
             border.color: Commons.Color.popups.border
             Text {
                 anchors.centerIn: parent
-                text: content.officialTitlebars ? "Use Omarchy controls" : "Set up or repair window controls"
+                text: content.officialTitlebars ? "Use Familiar controls" : "Set up or repair window controls"
                 font.family: Style.font.family
                 font.pixelSize: 11
                 color: Commons.Color.popups.text
@@ -383,7 +382,7 @@ ColumnLayout {
             }
         }
         PreferenceToggle {
-            visible: !content.officialTitlebars && content.service.titlebarMode !== "off"
+            visible: content.service.titlebarMode !== "off"
             objectName: "skipBrowserTitlebars"
             Layout.fillWidth: true
             label: "Skip Chrome and Chromium title bars"
@@ -391,7 +390,7 @@ ColumnLayout {
             onToggled: function(value) { content.service.setPreference("skipBrowserTitlebars", value); }
         }
         Text {
-            visible: !content.officialTitlebars && content.service.titlebarMode !== "off"
+            visible: content.service.titlebarMode !== "off"
             text: "Skip other apps with their own title bars (window classes, comma-separated)"
             Layout.fillWidth: true
             wrapMode: Text.WordWrap
@@ -400,7 +399,7 @@ ColumnLayout {
             color: Commons.Color.muted
         }
         Rectangle {
-            visible: !content.officialTitlebars && content.service.titlebarMode !== "off"
+            visible: content.service.titlebarMode !== "off"
             Layout.fillWidth: true
             height: 32
             radius: 6

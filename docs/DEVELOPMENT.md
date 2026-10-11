@@ -76,7 +76,7 @@ Requires an existing, working Familiar installation on the supported Linux
 x86_64 / Hyprland ABI, with git, jq and the usual Omarchy tools. On hosts with
 Omarchy’s official titlebar package, Core owns ABI compatibility: the installer
 skips private titlebar setup and supports only guarded source/rollback targets
-(see [migration details](TITLEBAR-MIGRATION.md)). Select **Use Omarchy controls**
+(see [migration details](TITLEBAR-MIGRATION.md)). Select **Use Familiar controls**
 in Familiar after installation; migration from a private backend needs logout/login. No compiler is
 needed. Local source changes and unexpected ignored files stop installation.
 Older installations without `setup-in-app.sh` are supported when their binaries

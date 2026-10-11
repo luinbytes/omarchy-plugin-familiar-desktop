@@ -131,5 +131,5 @@ use DockWidgetSlot on both sides and supply the narrow action adapter.
 A passing portable suite is readiness for desktop testing. Follow
 [DEVELOPMENT.md](DEVELOPMENT.md), [DESKTOP-SMOKE.md](DESKTOP-SMOKE.md) and
 [DOCK-PREVIEWS.md](DOCK-PREVIEWS.md) for source-bound builds, real lifecycle checks
-and rollback. The official titlebar migration has separate unresolved contracts
+and rollback. The official titlebar adapter has its compatibility contract and acceptance gates
 in [TITLEBAR-MIGRATION.md](TITLEBAR-MIGRATION.md).

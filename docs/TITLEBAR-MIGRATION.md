@@ -1,86 +1,87 @@
 # Official titlebars — issue #74
 
-The `dev/v0.1.6` branch implements an **explicit handoff to Core-managed
-controls**. It does not reproduce Familiar's Mac/Windows controls on the official
-renderer. No release or desktop acceptance is implied.
+On `dev/v0.1.6`, Familiar's Mac/Windows controls use Omarchy's official renderer.
+This supersedes the earlier native-only handoff which left those styles inactive.
+No release or desktop acceptance is implied.
 
-## Ownership and behaviour
+## What changes
 
-Core [#14482](https://github.com/omacom/omarchy/pull/14482) merged on 11 October
-2026 at `14987189695a8ae1f2270262fdf77446fafb1ba3`. Package
-[#957](https://github.com/omacom/omarchy-pkgs/pull/957) builds
-[`omacom/omarchy-hyprland-titlebars` v0.2.0](https://github.com/omacom/omarchy-hyprland-titlebars/tree/v0.2.0).
-The package lives at `/usr/lib/omarchy-hyprland-titlebars/titlebars.so`.
-Core's `default/hypr/workspace-modes.lua` owns its load requests, global button
-list, theme and `omarchy-floating-workspace` scope. Familiar does not overwrite
-these, change workspace layouts, install/remove packages or switch channels.
-The package and Hyprland enforce ABI compatibility; Familiar never probes it by
-loading/unloading a second plugin. Plugin registration names do not prove origin.
+In **Windows → Window controls**, choose **Use Familiar controls**, then Mac,
+Windows or Theme. Familiar keeps close/minimise/maximise, button alignment,
+traffic-light colours, hover symbols, size, font, theme and app exclusions.
+Minimised windows restore through the existing dock. Every action, including
+double-click, carries the clicked window's `%WINDOW%` address; a focus change
+cannot retarget it. The stock renderer uses `×`, `−`, `+` and `□` glyphs with
+round/rounded-square buttons, not the old fork's Cairo vector icons.
 
-In **Windows → Window controls**, choose **Use Omarchy controls**. This explicit
-choice replaces the old conflict-only state. Core supplies close/maximise and
-floating-workspace bars (Super+L); minimise is available from Familiar's dock.
-Familiar's Mac/Windows styles, size, browser/class exclusions and theme policy
-remain saved but inactive, and those controls are hidden in this mode. Off or
-unloading Familiar does not turn off Core's bars. The UI says who owns them.
-`managed` reports delegation to an available Core API, not proof of visible bars
-or a loaded plugin: Core legitimately leaves it unloaded on tiled workspaces.
+Core still owns which workspaces float, its window tags, shadows, opacity and
+loading `/usr/lib/omarchy-hyprland-titlebars/titlebars.so`. Familiar does not load
+or unload a backend, change workspace modes, or edit Core/package files. Controls
+follow Core's floating-workspace scope (Super+L), not every tiled window.
+Choosing **Omarchy**, disabling Familiar, or an unconfigured Theme restores Core's
+normal controls. This choice retains the stored `off` value for backward
+compatibility; it does not disable Core's own bars. Saved preferences survive.
 
-Custom rendering parity would require a separate supported ownership/renderer
-contract. It is not part of this native handoff and must not be described as done.
-Existing installations without the official package retain their previous private
-backend. New setup on an official-package host downloads only Familiar's helper.
+## Configuration contract
 
-## Migration and recovery
+The reference is Core [#14482](https://github.com/omacom/omarchy/pull/14482), commit
+`14987189695a8ae1f2270262fdf77446fafb1ba3`, merged 11 October 2026, and the official
+renderer [v0.2.0](https://github.com/omacom/omarchy-hyprland-titlebars/tree/v0.2.0)
+packaged by [#957](https://github.com/omacom/omarchy-pkgs/pull/957).
 
-The helper's `titlebars migrate` command validates the exact owned include and
-installation identity before editing anything. It keeps the inert include and
-legacy ownership fields to allow rollback to a guarded older version, replaces
-only Familiar's generated loader with a comment, and journals the delegation.
-It never reloads, loads or unloads a compositor backend. No user preference is
-changed. A failed/interrupted write reports `migration-required`; retry the same
-button. Once delegation is recorded, reconciliation cannot recreate the private
-loader, even if the system package is subsequently removed.
+Core currently has no per-consumer button-list API. Familiar therefore uses a
+small, explicitly tested **compatibility adapter**, not an advertised Core
+extension API. Its existing `looknfeel.lua` include runs before Core's workspace
+layout restoration. It wraps that module's one `apply()` call, temporarily
+captures its two button declarations, then restores `add_button` immediately,
+including on errors. Only after verifying those exact actions and Core's
+workspace tag does it substitute three Familiar buttons and appearance settings.
+Other Core behaviour runs unchanged. On a changed contract or unexpected load
+order, the captured Core buttons are replayed unchanged and Familiar reports an
+integration error. Repeated config reloads start fresh, never append another set.
 
-When a previous private owner exists, migration records the current
-`HYPRLAND_INSTANCE_SIGNATURE` and reports `restart-required` until a different,
-nonempty session is seen. Log out and back in; a shell restart is insufficient.
-Without a session signature it refuses migration rather than claiming retirement.
-Fresh native setup needs no private library and no forced restart. Missing Core
-support reports `core-required`; missing package reports `package-missing`.
+Do not combine this with another theme/plugin that defines its own Hyprbars
+buttons. Multiple registered backends are refused. A registration name alone is
+not treated as library provenance; only Core requests the official library.
+The package and Hyprland enforce their own exact ABI check.
 
-`titlebars remove` removes only the exact Familiar include and retains the
-handoff receipt/preferences. It never removes Omarchy's package or alters its
-configuration. Edited/foreign hooks stop for review.
+## Migration, disable and rollback
 
-## Development installation and rollback
+Migration validates the exact owned include and installation identity, journals
+its progress, replaces the old generated loader, and adds the include on a fresh
+installation. It does not reload the compositor at that point. An old private
+owner records `HYPRLAND_INSTANCE_SIGNATURE`; log out/in before applying the new
+adapter. The same or unknown session cannot be treated as a retired private
+mapping. Retry an interrupted migration with the same button. Previous native-only
+handoffs require this explicit selection too.
 
-The source-bound development installer now permits the official package. It
-skips private-backend setup/disable and the private ABI gate in that path, while
-still verifying the bundled helper and source identity. Existing working private
-installations retain their private bytes in snapshots for older-Omarchy rollback;
-those bytes are not loaded on an official host. This pipeline still targets
-Linux x86_64 and requires the existing complete installation documented in
-[DEVELOPMENT.md](DEVELOPMENT.md).
+After migration, style changes use the shared write/reload/verify transaction.
+A failure restores the previous generated file without overwriting external
+configuration edits. Stale instance teardown cannot remove a newer instance's
+controls. Disable/removal reload Core defaults, never unload its library.
+Missing package/Core support cannot resurrect Familiar's private loader.
+Generated configuration checks the installed source's controls-v2 marker, so
+rollback to an older source cannot keep invoking unsupported helper arguments.
 
-Official-host source transitions allow the audited v0.1.5 commit
-`439f97480bb0803f32137dcb700fbb939dc959ff` and trusted source with the handoff-v1
-contract marker. Pre-guard targets are refused before desktop/source activation.
-Rollback to v0.1.5 restores its guarded, paused-controls behaviour; it does not
-restore private controls over Core. The official package remains installed.
-Keep the bundle and snapshot, and do not delete a retained include before testing
-rollback to an older source that expects it.
+Development installation retains the old binaries for rollback and still checks
+source/artifact identity. Official hosts allow only the audited v0.1.5 commit
+`439f97480bb0803f32137dcb700fbb939dc959ff` or guarded newer source. Rolling back to
+v0.1.5 restores that version's paused-controls behaviour, never private controls
+over Core. No version, release pin, package channel or system package is changed.
 
-## Evidence and acceptance still required
+## Validation and acceptance
 
-Rust regressions cover fresh/legacy handoff, session transition, no compositor
-mutation, preference preservation, absent package/Core, interrupted writes and
-foreign/edited hooks. Installer fixtures cover official install/rollback without
-private setup, unsafe target refusal and no package changes. QML tests exercise
-explicit selection and serialized completion.
+Rust tests cover migration/session gates, transactional recovery, stale owners,
+explicit targets and source guards. Lua tests execute the unmodified Core module
+for Mac/Windows, tiled/floating workspaces, first load, changed Core, Core errors,
+multiple backends and late includes. The desktop CI matrix adds the actual Core
+revision and an unmodified official v0.2.0 renderer built against the guest's
+Hyprland headers. Its dedicated test exercises real pointer buttons, minimise/
+restore, reload, disable, removal and returning to tiling, and saves screenshots.
+This source-build test is not evidence of the published pacman artifact's delivery.
 
-Before merge, test the exact development artifact on the XPS: migration, logout/
-login, Core Super+L cycle, actual controls, theme changes, multiple windows,
-disabling/removing Familiar, package absence, and rollback. Green CI is not XPS
-acceptance. Keep #74 open until Tom accepts the native handoff and the tested
-behaviour; do not claim Mac/Windows titlebar parity or close it automatically.
+Record CI outcomes and exact artifact identity in the draft PR. Before merge,
+Tom must accept that build on the XPS: migration/logout, the selected styles,
+actual buttons and double-click/drag, theme changes, exclusions, mixed scaling,
+disabling/removing Familiar and development rollback. Clipboard acceptance is
+separate. Green CI is not XPS acceptance; #74 stays open until that acceptance.
