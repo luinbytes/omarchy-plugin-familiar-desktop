@@ -12,12 +12,13 @@ retry pacman -S --needed --noconfirm git jq nodejs dbus sudo socat curl inotify-
   mesa foot grim gcc wayland qt6-declarative qt6-wayland qt6-multimedia qt6-svg qt6-imageformats ttf-dejavu
 if [[ ${NATIVE_TITLEBARS:-0} == 1 ]]; then
   retry pacman -S --needed --noconfirm cmake pkgconf make glaze
-  # Exact upstream archive from omarchy-pkgs #957, built against real headers.
+  # Exact upstream archive from omarchy-pkgs #964, built against real headers.
   # No source modification or bypass of the compositor's ABI check.
-  curl --fail --location --retry 3 --max-time 120 https://github.com/omacom/omarchy-hyprland-titlebars/archive/refs/tags/v0.2.0.tar.gz -o "$root/titlebars.tar.gz"
-  echo 'cd6ece3e3fc4afed4052cba5045faa1f6fb2e6a2203bddd7e85b9c57646bb10b  '"$root/titlebars.tar.gz" | sha256sum --check --strict
+  curl --fail --location --retry 3 --max-time 120 https://github.com/omacom/omarchy-hyprland-titlebars/archive/refs/tags/v0.2.1.tar.gz -o "$root/titlebars.tar.gz"
+  echo '73320b611eb768a18d61f2ed7ace8f5a94f523a7cbcce132b1db246288efd5b8  '"$root/titlebars.tar.gz" | sha256sum --check --strict
+  sha256sum "$root/titlebars.tar.gz" > "$root/smoke-evidence/official-titlebars-source.sha256"
   tar --no-same-owner -xzf "$root/titlebars.tar.gz" -C "$root"
-  cmake -S "$root/omarchy-hyprland-titlebars-0.2.0" -B "$root/titlebar-build" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
+  cmake -S "$root/omarchy-hyprland-titlebars-0.2.1" -B "$root/titlebar-build" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
   cmake --build "$root/titlebar-build" -j2
   cmake --install "$root/titlebar-build"
   sha256sum /usr/lib/omarchy-hyprland-titlebars/titlebars.so > "$root/smoke-evidence/official-titlebars.sha256"
