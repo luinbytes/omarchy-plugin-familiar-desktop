@@ -14,7 +14,11 @@ abi="$(hyprctl version | sed -n 's/^Version ABI string: //p')"
 [[ "$abi" =~ ^[a-zA-Z0-9_.-]+$ ]] || { echo 'Cannot read the running Hyprland ABI.' >&2; exit 1; }
 work="$(mktemp -d)"
 trap 'rm -rf -- "$work"' EXIT
-cargo build --manifest-path backend/Cargo.toml --locked --release
+# A caller's CARGO_TARGET_DIR or .cargo/config.toml must never redirect the build
+# while we package an older default-path binary. Pin both output and native target.
+host="$(rustc -vV | sed -n 's/^host: //p')"
+[[ "$host" == "$architecture-"*linux* ]] || { echo 'Rust must target this Linux desktop.' >&2; exit 1; }
+cargo build --manifest-path backend/Cargo.toml --locked --release --target "$host" --target-dir "$work/cargo-target"
 renderer=private
 if [[ -f /usr/lib/omarchy-hyprland-titlebars/titlebars.so ]]; then
   renderer=omarchy
@@ -26,7 +30,7 @@ dir="$work/downloaded/local"
 mkdir -p "$dir"
 backend_asset="familiar-desktop-linux-$architecture"
 library_asset="hyprbars-linux-$architecture-$abi.so"
-install -m755 backend/target/release/familiar-desktop "$dir/$backend_asset"
+install -m755 "$work/cargo-target/$host/release/familiar-desktop" "$dir/$backend_asset"
 assets=("$backend_asset")
 if [[ "$renderer" == private ]]; then
   install -m644 "hyprbars-assets/$library_asset" "$dir/$library_asset"

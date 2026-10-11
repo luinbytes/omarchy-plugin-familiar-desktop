@@ -15,6 +15,7 @@ node tests/test_candidate_install.cjs
 node tests/test_dev_install.cjs
 node tests/test_dev_install.cjs --arm
 node tests/test_dev_bundle.cjs
+node tests/test_local_dev_build.cjs
 node tests/test_release_tag.cjs
 node tests/test_release_smoke.cjs
 node tests/test_release_publish.cjs
