@@ -24,13 +24,13 @@ official=false
 # Newer sources opt in through the handoff contract marker.
 official_safe_source() {
   [[ "$1" == 439f97480bb0803f32137dcb700fbb939dc959ff ]] ||
-    git -C "$plugin" show "$1:backend/src/titlebars.rs" 2>/dev/null | grep -qF '// Familiar official-titlebar handoff v1'
+    git -C "$plugin" show "$1:backend/src/titlebars.rs" 2>/dev/null | grep -F '// Familiar official-titlebar handoff v1' >/dev/null
 }
 for tool in git jq sha256sum flock omarchy hyprctl install; do
   command -v "$tool" >/dev/null || { echo "Missing $tool" >&2; exit 1; }
 done
 [[ "$(uname -s)" == Linux && ( "$architecture" == x86_64 || "$architecture" == aarch64 ) && "$abi" =~ ^[a-zA-Z0-9_.-]+$ ]] || { echo 'Unsupported architecture or Hyprland ABI; nothing changed.' >&2; exit 1; }
-[[ -d "$plugin/.git" && ! -L "$plugin" ]] || { echo 'Install and finish stable Familiar setup first.' >&2; exit 1; }
+[[ -d "$plugin/.git" && ! -L "$plugin" ]] || { echo 'Install the Familiar plugin source first; use --initial for unfinished setup.' >&2; exit 1; }
 [[ -z "$(git -C "$plugin" status --porcelain --untracked-files=all)" ]] || { echo 'Preserve local source changes before testing.' >&2; exit 1; }
 while IFS= read -r ignored; do
   case "$ignored" in bin/familiar-desktop|bin/.familiar-desktop.dev|bin/hyprbars/*|backend/target/*) ;;
@@ -158,7 +158,15 @@ if [[ "$official" == true ]]; then
   official_safe_source "$target" || { echo 'Rollback/source lacks the official-titlebar guard; nothing was activated. Keep Omarchy installed and use a compatible Familiar build.' >&2; exit 1; }
 fi
 printf 'Installing source %s\nRollback snapshot: %s\n' "$target" "$snapshot"
-trap 'echo "Installation did not complete. Recover with: bash $bundle/install-dev.sh --rollback $snapshot" >&2' ERR
+recovery_message() {
+  local code=$?
+  if (( code != 0 )); then
+    printf 'Installation did not complete. Recover with: bash %q --rollback %q\n' "$bundle/install-dev.sh" "$snapshot" >&2
+  fi
+}
+trap recovery_message EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 # Reset taskbar placement with this bundle's verified helper, before replacing
 # the installed backend (the previous stable version may not know taskbar).
 # This helper operates only on the user's placement journal, not titlebar ownership.
@@ -177,6 +185,7 @@ fi
 # conversely re-enabling after removal inserts a new default bar widget.
 shell_config="${XDG_CONFIG_HOME:-$HOME/.config}/omarchy/shell.json"
 placement=''
+[[ -f "$shell_config" && ! -L "$shell_config" ]] || { echo 'Cannot preserve plugin activation without a regular shell.json; nothing staged.' >&2; exit 1; }
 if [[ -f "$shell_config" && ! -L "$shell_config" ]]; then
   if [[ "$mode" == install ]]; then
     placement="$snapshot/shell.json"
@@ -221,21 +230,43 @@ restore_placement() {
   mv "$after" "$shell_config"
   rm -f "$before"
 }
+# All source/binary mutations share this boundary, including unfinished setup.
+# disable changes the shell's configuration; restart waits for the old QML
+# instance and its teardown to exit before we replace anything it could read.
+quiesce() {
+  omarchy plugin disable "$plugin_id"
+  omarchy restart shell
+}
+restore_activation() {
+  # Restore only Familiar's entries, including disabledPlugins, so a previously
+  # disabled plugin stays disabled. Do not transiently enable it or reset peers.
+  flock -u 9
+  restore_placement
+  omarchy restart shell
+  if [[ "$mode" == install ]]; then
+    jq '.placementRestored = true' "$snapshot/snapshot.json" > "$snapshot/snapshot.json.new"
+    mv "$snapshot/snapshot.json.new" "$snapshot/snapshot.json"
+    (cd "$snapshot"; for file in ./*; do [[ "$file" == ./SHA256SUMS ]] || sha256sum "$file"; done > SHA256SUMS)
+  fi
+}
 # ARM users cannot finish stable x86_64 setup first. Stage a source-bound local
 # bundle explicitly, then let the normal setup screen apply the chosen style.
 if [[ "$initial" == true ]]; then
+  quiesce
   printf 'pending\n' > "$state/setup-pending"
   git -C "$plugin" checkout --detach "$target"
   [[ "$(git -C "$plugin" rev-parse HEAD)" == "$target" ]]
   mkdir -p "$plugin/bin"
-  install -m 755 "$bytes/$backend_asset" "$plugin/bin/familiar-desktop"
+  install -m 755 "$bytes/$backend_asset" "$plugin/bin/.familiar-desktop.dev"
+  mv "$plugin/bin/.familiar-desktop.dev" "$plugin/bin/familiar-desktop"
   if [[ "$official" != true ]]; then
     mkdir -p "$(dirname "$library")"
-    install -m 644 "$bytes/$asset" "$library"
+    install -m 644 "$bytes/$asset" "$library.dev"
+    mv "$library.dev" "$library"
   fi
   jq --arg source "$plugin" '. + {sourceDirectory:$source}' "$bundle/DEV-BUILD.json" > "$receipt.new"
   mv "$receipt.new" "$receipt"
-  flock -u 9
+  restore_activation
   echo 'Development binaries staged. Open Familiar and start setup to choose window controls.'
   printf 'Rollback: bash %q --rollback %q\n' "$bundle/install-dev.sh" "$snapshot"
   exit 0
@@ -253,39 +284,54 @@ if [[ "$mode" == --rollback ]] && jq -e '.initial == true' "$snapshot/snapshot.j
   else
     jq -e --arg source "$plugin" --arg sha "$current" 'select(.sourceDirectory == $source and .commit == $sha and .channel == "development")' "$receipt" >/dev/null
   fi
-  # Validate current bytes/source before running the helper that removes its hook.
+  # With no receipt, staging never activated controls. Discard partial files
+  # without executing them; a failed copy need not be a complete binary.
   names=("$backend_asset")
   [[ "$official" == true ]] || names+=("$asset")
   for name in "${names[@]}"; do
     file="$plugin/bin/familiar-desktop"; [[ "$name" != "$asset" ]] || file="$library"
-    if [[ ! -e "$file" && ! -L "$file" && ! -e "$receipt" ]]; then continue; fi
+    if [[ ! -e "$receipt" ]]; then
+      [[ ! -L "$file" ]] || exit 1
+      continue
+    fi
     [[ -f "$file" && ! -L "$file" ]] || exit 1
     expected="$(jq -er --arg name "$name" '.assets[$name]' "$metadata")"
     actual="$(sha256sum "$file")"
     [[ "$expected" =~ ^[0-9a-f]{64}$ && "${actual%% *}" == "$expected" ]] || { echo 'Installed development bytes are corrupt; reinstall the matching bundle before rollback.' >&2; exit 1; }
   done
+  quiesce
   if [[ -e "$receipt" ]]; then
+    if [[ "$official" == true ]]; then
+      # Clear native actions with the verified new helper before retiring it.
+      (cd "$bundle" && sha256sum --check --strict SHA256SUMS)
+      verify_assets "$bundle" "$bundle/DEV-BUILD.json"
+      install -m 755 "$bundle/$backend_asset" "$plugin/bin/.familiar-desktop.dev"
+      mv "$plugin/bin/.familiar-desktop.dev" "$plugin/bin/familiar-desktop"
+    fi
     "$plugin/bin/familiar-desktop" desktop restore
     "$plugin/bin/familiar-desktop" titlebars remove
   fi
   git -C "$plugin" checkout --detach "$target"
-  rm -f -- "$plugin/bin/familiar-desktop" "$library" "$receipt"
-  rmdir -- "$(dirname "$library")" "$plugin/bin/hyprbars" 2>/dev/null || true
+  rm -f -- "$plugin/bin/familiar-desktop" "$plugin/bin/.familiar-desktop.dev" "$receipt" "$receipt.new"
+  if ! jq -e '.official == true' "$snapshot/snapshot.json" >/dev/null; then
+    rm -f -- "$library" "$library.dev"
+    rmdir -- "$(dirname "$library")" "$plugin/bin/hyprbars" 2>/dev/null || true
+  fi
   for marker in setup-pending bar-placement-pending; do
     if [[ -f "$snapshot/$marker" ]]; then cp "$snapshot/$marker" "$state/$marker"; else rm -f -- "$state/$marker"; fi
   done
-  restore_placement
+  restore_activation
   echo 'Initial development setup rolled back; personal settings retained.'
   exit 0
 fi
 # Do not run unverified partial binaries when recovering a failed install.
+quiesce
 if [[ "$official" == true ]]; then
   # Retire native button actions while the controls-v2 helper is still available.
   # An older rollback helper may not understand --window. Verify the bundle even
   # on recovery, and run at the installed path so ownership resolves correctly.
   (cd "$bundle" && sha256sum --check --strict SHA256SUMS)
   verify_assets "$bundle" "$bundle/DEV-BUILD.json"
-  omarchy plugin disable "$plugin_id"
   install -m 755 "$bundle/$backend_asset" "$plugin/bin/.familiar-desktop.dev"
   mv "$plugin/bin/.familiar-desktop.dev" "$plugin/bin/familiar-desktop"
   "$plugin/bin/familiar-desktop" titlebars disable
@@ -294,7 +340,6 @@ if [[ "$mode" == install ]]; then
   "$plugin/bin/familiar-desktop" desktop restore
   if [[ "$official" != true ]]; then "$plugin/bin/familiar-desktop" titlebars disable; fi
 else
-  omarchy plugin disable "$plugin_id"
   # The helper derives ownership from its executable path. Restore the verified
   # previous helper at that path before using it to recover a partial install.
   install -m 755 "$snapshot/$backend_asset" "$plugin/bin/.familiar-desktop.dev"
@@ -302,7 +347,6 @@ else
   "$plugin/bin/familiar-desktop" desktop restore
   if [[ "$official" != true ]]; then "$plugin/bin/familiar-desktop" titlebars disable; fi
 fi
-omarchy plugin disable "$plugin_id"
 git -C "$plugin" checkout --detach "$target"
 [[ "$(git -C "$plugin" rev-parse HEAD)" == "$target" ]]
 install -m 755 "$bytes/$backend_asset" "$plugin/bin/.familiar-desktop.dev"
@@ -327,13 +371,5 @@ if [[ "$official" != true ]]; then
 fi
 flock -u 9
 installed_ready
-omarchy plugin enable "$plugin_id"
-restore_placement
-if [[ "$mode" == install ]]; then
-  jq '.placementRestored = true' "$snapshot/snapshot.json" > "$snapshot/snapshot.json.new"
-  mv "$snapshot/snapshot.json.new" "$snapshot/snapshot.json"
-  (cd "$snapshot"; for file in ./*; do [[ "$file" == ./SHA256SUMS ]] || sha256sum "$file"; done > SHA256SUMS)
-fi
-omarchy restart shell
-trap - ERR
+restore_activation
 printf '\nSource installed: %s\nRollback: bash %q --rollback %q\n' "$target" "$bundle/install-dev.sh" "$snapshot"

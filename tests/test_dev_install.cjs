@@ -16,7 +16,7 @@ const asset = `hyprbars-linux-${architecture}-${abi}.so`;
 const realGit = execFileSync('bash',['-c','command -v git'],{encoding:'utf8'}).trim();
 const sha = s => createHash('sha256').update(s).digest('hex');
 const write = (p,s) => {fs.mkdirSync(path.dirname(p),{recursive:true});fs.writeFileSync(p,s,{mode:0o755});};
-const env = {...process.env, HOME:home, XDG_CONFIG_HOME:path.join(home,'.config'), XDG_STATE_HOME:path.join(home,'.local/state'), PATH:tools+':'+process.env.PATH, CALLS:path.join(temp,'calls'), PLUGIN:plugin, ABI:abi};
+const env = {...process.env, HOME:home, XDG_CONFIG_HOME:path.join(home,'.config'), XDG_STATE_HOME:path.join(home,'.local/state'), PATH:tools+':'+process.env.PATH, CALLS:path.join(temp,'calls'), LOADED:path.join(temp,'loaded'), PLUGIN:plugin, ABI:abi};
 const git = (...args) => execFileSync(realGit,['-C',plugin,...args],{env,encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
 const helper = label => `#!/bin/bash
 set -eu
@@ -43,12 +43,12 @@ fi
 function sums(dir) {
   fs.writeFileSync(path.join(dir,'SHA256SUMS'),fs.readdirSync(dir).filter(n=>n!=='SHA256SUMS').map(n=>`${sha(fs.readFileSync(path.join(dir,n)))}  ${n}\n`).join(''));
 }
-function bundle(commit, label) {
+function bundle(commit, label, official=false) {
   const dir = path.join(temp,label);fs.mkdirSync(dir);
   write(path.join(dir,backendAsset),helper(label));
-  write(path.join(dir,asset),label+' library');
+  if(!official) write(path.join(dir,asset),label+' library');
   write(path.join(dir,'install-dev.sh'),fs.readFileSync('scripts/install-dev.sh','utf8').replace('@SOURCE_SHA@',commit).replaceAll('/usr/lib/omarchy-hyprland-titlebars/titlebars.so',officialLibrary));
-  write(path.join(dir,'DEV-BUILD.json'),JSON.stringify({schemaVersion:1,channel:'development',repository:'tcballard/omarchy-plugin-familiar-desktop',commit,runId:'123',runAttempt:'1',assets:{[backendAsset]:sha(helper(label)),[asset]:sha(label+' library')}}));
+  write(path.join(dir,'DEV-BUILD.json'),JSON.stringify({schemaVersion:1,channel:'development',repository:'tcballard/omarchy-plugin-familiar-desktop',commit,runId:'123',runAttempt:'1',renderer:official?'omarchy':'private',assets:{[backendAsset]:sha(helper(label)),...(!official?{[asset]:sha(label+' library')}:{})}}));
   sums(dir);return dir;
 }
 function run(dir,args=[],extra={}) {return spawnSync('bash',[path.join(dir,'install-dev.sh'),...args],{env:{...env,...extra},encoding:'utf8'});}
@@ -57,18 +57,53 @@ function status() {return spawnSync('bash',[path.join(plugin,'setup-in-app.sh'),
 function log() {return fs.existsSync(env.CALLS)?fs.readFileSync(env.CALLS,'utf8'):'';}
 try {
   fs.mkdirSync(tools);fs.mkdirSync(plugin,{recursive:true});
-  write(path.join(tools,'git'),`#!/bin/bash\nif [[ "$3" == fetch ]]; then exec ${realGit} -C "$2" fetch --no-tags "$2" "\u0024{@: -1}"; fi\nexec ${realGit} "$@"\n`);
+  write(path.join(tools,'git'),`#!/bin/bash
+if [[ "$3" == fetch ]]; then exec ${realGit} -C "$2" fetch --no-tags "$2" "\u0024{@: -1}"; fi
+if [[ "$3" == checkout ]]; then
+  [[ "$(cat "$LOADED")" == false ]] || { echo 'Source changed while loaded' >&2; exit 90; }
+  echo checkout >> "$CALLS"
+  [[ "\u0024{FAIL_CHECKOUT:-}" != 1 ]] || exit 7
+fi
+exec ${realGit} "$@"
+`);
+  write(path.join(tools,'install'),`#!/bin/bash
+if [[ "$*" == *"$PLUGIN/bin/"* ]]; then
+  [[ "$(cat "$LOADED")" == false ]] || { echo 'Binary changed while loaded' >&2; exit 90; }
+  echo stage-binary >> "$CALLS"
+fi
+if [[ "\u0024{FAIL_STAGE:-}" == 1 && "$*" == *hyprbars-linux* ]]; then
+  echo partial > "\u0024{@: -1}"
+  exit 7
+fi
+exec /usr/bin/install "$@"
+`);
+  write(path.join(tools,'rm'),`#!/bin/bash
+if [[ "$*" == *"$PLUGIN/bin/"* ]]; then
+  [[ "$(cat "$LOADED")" == false ]] || { echo 'Binary removed while loaded' >&2; exit 90; }
+  echo remove-binary >> "$CALLS"
+fi
+exec /usr/bin/rm "$@"
+`);
   write(path.join(tools,'hyprctl'),`#!/bin/bash\necho 'Version ABI string: ${abi}'\n`);
   write(path.join(tools,'omarchy'),`#!/usr/bin/env node
 const fs=require('fs'), p=process.env.HOME+'/.config/omarchy/shell.json';
 fs.appendFileSync(process.env.CALLS,'omarchy '+process.argv.slice(2).join(' ')+'\\n');
-if (!fs.existsSync(p) || process.argv[2]!=='plugin') process.exit(0);
-const c=JSON.parse(fs.readFileSync(p)), id=process.argv[4], key=v=>typeof v==='string'?v:v.id;
+if (!fs.existsSync(p)) process.exit(0);
+const c=JSON.parse(fs.readFileSync(p)), id='io.github.tcballard.familiar-desktop', key=v=>typeof v==='string'?v:v.id;
 const lists=[...Object.values(c.bar.layout),c.plugins];
 const found=lists.find(a=>a.some(v=>key(v)===id));
-if(process.argv[3]==='disable' && found) found.splice(found.findIndex(v=>key(v)===id),1);
+if(process.argv[3]==='disable' && process.env.FAIL_DISABLE==='1') process.exit(7);
+if(process.argv[3]==='disable') {
+  // Cover both historical entry removal and Core's disabledPlugins contract.
+  if (${architecture === 'aarch64'}) c.disabledPlugins=[...new Set([...(c.disabledPlugins||[]),id])];
+  else if(found) found.splice(found.findIndex(v=>key(v)===id),1);
+}
 if(process.argv[3]==='enable' && !found) c.bar.layout.right.push({id});
-if(process.argv[3]==='enable' && process.env.OTHER_EDIT==='1') c.idle.lock=900;
+if(process.argv[2]==='restart') {
+  if(process.env.FAIL_QUIESCE==='1') process.exit(7);
+  fs.writeFileSync(process.env.LOADED,String(!!found && !(c.disabledPlugins||[]).includes(id)));
+  if(process.env.OTHER_EDIT==='1') c.idle.lock=900;
+}
 fs.writeFileSync(p,JSON.stringify(c));
 `);
   write(path.join(tools,'uname'),`#!/bin/bash\nif [[ "$1" == -m ]]; then echo ${architecture}; else echo Linux; fi\n`);
@@ -77,7 +112,7 @@ fs.writeFileSync(p,JSON.stringify(c));
   write(path.join(plugin,'release-binaries.sha256'),`${sha(helper('stable'))}  ${backendAsset}\n${sha('stable library')}  ${asset}\n`);
   git('add','.');git('commit','-m','legacy without in-app setup');const legacy=git('rev-parse','HEAD');
   write(path.join(plugin,'setup-in-app.sh'),fs.readFileSync('setup-in-app.sh','utf8').replaceAll('/usr/lib/omarchy-hyprland-titlebars/titlebars.so',officialLibrary));
-  write(path.join(plugin,'backend/src/titlebars.rs'),'// Familiar official-titlebar handoff v1');
+  write(path.join(plugin,'backend/src/titlebars.rs'),fs.readFileSync('backend/src/titlebars.rs'));
   write(path.join(plugin,'bar-placement.sh'),fs.readFileSync('bar-placement.sh','utf8'));
   git('add','.');git('commit','-m','stable fixture');const stable=git('rev-parse','HEAD');
   write(path.join(plugin,'feature.txt'),'first');git('add','.');git('commit','-m','first');const first=git('rev-parse','HEAD');
@@ -90,9 +125,10 @@ fs.writeFileSync(p,JSON.stringify(c));
   execFileSync(path.join(plugin,'bin/familiar-desktop'),['titlebars','setup'],{env});
   const a=bundle(first,'dev-a'), b=bundle(second,'dev-b');
   const shellPath=path.join(home,'.config/omarchy/shell.json');
-  const shell={version:1,plugins:[{id:'io.github.tcballard.familiar-desktop',custom:42}],idle:{lock:300},
+  const shell={version:1,plugins:[{id:'io.github.tcballard.familiar-desktop',custom:42}],disabledPlugins:[],idle:{lock:300},
     bar:{position:'top',layout:{left:[{id:'omarchy.menu'}],center:[{id:'drawer',widgets:['io.github.tcballard.familiar-desktop']}],right:[{id:'omarchy.clock',format:'HH:mm'}]}}};
   write(shellPath,JSON.stringify(shell));
+  write(env.LOADED,'true');
   const readShell=()=>JSON.parse(fs.readFileSync(shellPath));
   ok(status());
   // Official-package path supports source-matched install and rollback without
@@ -183,7 +219,9 @@ fs.writeFileSync(p,JSON.stringify(c));
   write(env.CALLS,'');
   ok(run(a,['--initial']));assert.equal(git('rev-parse','HEAD'),first);
   assert.deepEqual(JSON.parse(fs.readFileSync(path.join(home,'.config/omarchy/familiar-desktop-settings.json'))),settings);
-  assert.doesNotMatch(log(),/titlebars|plugin disable/);assert.equal(status().status,3);
+  assert.doesNotMatch(log(),/titlebars/);assert.equal(status().status,3);
+  assert.ok(log().indexOf('plugin disable') < log().indexOf('checkout'));
+  assert.deepEqual(readShell(),shell);assert.equal(fs.readFileSync(env.LOADED,'utf8'),'true');
   assert.notEqual(run(b,['--initial']).status,0);
   // Wrong target and corrupt receipt bytes stop before backend activation.
   const setup=()=>spawnSync('bash',[path.join(plugin,'setup-in-app.sh'),'install','mac'],{env,encoding:'utf8'});
@@ -196,13 +234,47 @@ fs.writeFileSync(p,JSON.stringify(c));
   assert.ok(!fs.existsSync(path.join(plugin,'bin/familiar-desktop')));
   assert.ok(!fs.existsSync(receiptPath));assert.equal(fs.readFileSync(path.join(state,'setup-pending'),'utf8'),'original pending');
   assert.equal(status().status,3);
+  assert.deepEqual(readShell(),shell);assert.equal(fs.readFileSync(env.LOADED,'utf8'),'true');
   assert.deepEqual(JSON.parse(fs.readFileSync(path.join(home,'.config/omarchy/familiar-desktop-settings.json'))),afterSetupSettings);
   // Interrupt after staging the backend but before the library/receipt. Rollback
   // verifies partial bytes without executing them and permits another initial try.
-  write(path.join(tools,'install'),'#!/bin/bash\nif [[ "$FAIL_STAGE" == 1 && "$*" == *hyprbars-linux* ]]; then exit 7; fi\nexec /usr/bin/install "$@"\n');
   write(env.CALLS,'');assert.notEqual(run(a,['--initial'],{FAIL_STAGE:'1'}).status,0);
-  assert.ok(!fs.existsSync(receiptPath));assert.equal(log(),'');
-  ok(run(a,['--rollback']));assert.equal(log(),'');assert.equal(git('rev-parse','HEAD'),stable);
+  assert.ok(!fs.existsSync(receiptPath));assert.equal(fs.readFileSync(env.LOADED,'utf8'),'false');
+  assert.doesNotMatch(log(),/familiar-desktop (desktop|titlebars)/);
+  ok(run(a,['--rollback']));assert.equal(git('rev-parse','HEAD'),stable);
+  assert.doesNotMatch(log(),/familiar-desktop (desktop|titlebars)/);
+  assert.deepEqual(readShell(),shell);assert.equal(fs.readFileSync(env.LOADED,'utf8'),'true');
   ok(run(a,['--initial']));ok(run(a,['--rollback']));
+  // Disable/restart/checkout failures never stage while loaded, and the saved
+  // placement/activation survives recovery, including initially disabled users.
+  for(const failure of ['FAIL_DISABLE','FAIL_QUIESCE','FAIL_CHECKOUT']) {
+    write(env.CALLS,'');const failed=run(a,['--initial'],{[failure]:'1'});
+    assert.notEqual(failed.status,0);assert.match(failed.stderr,/--rollback/);
+    assert.doesNotMatch(log(),/stage-binary/);assert.equal(git('rev-parse','HEAD'),stable);
+    ok(run(a,['--rollback']));assert.deepEqual(readShell(),shell);
+  }
+  shell.disabledPlugins.push('io.github.tcballard.familiar-desktop');
+  write(shellPath,JSON.stringify(shell));write(env.LOADED,'false');
+  ok(run(a,['--initial']));assert.deepEqual(readShell(),shell);
+  assert.equal(fs.readFileSync(env.LOADED,'utf8'),'false');
+  ok(run(a,['--rollback']));assert.deepEqual(readShell(),shell);
+  assert.equal(fs.readFileSync(env.LOADED,'utf8'),'false');
+  // Official ARM/x86 onboarding needs only the matching backend, with the same
+  // guarded lifecycle and no private library or download. Rollback requires Core.
+  shell.disabledPlugins=[];write(shellPath,JSON.stringify(shell));write(env.LOADED,'true');
+  write(officialLibrary,'official');
+  const native=bundle(first,'native','omarchy');write(env.CALLS,'');
+  ok(run(native,['--initial']));assert.deepEqual(readShell(),shell);
+  assert.equal(status().status,3);ok(setup());ok(status());
+  assert.ok(!fs.existsSync(path.join(plugin,'bin/hyprbars')));
+  assert.doesNotMatch(log(),/titlebars setup|titlebars apply|download/);
+  fs.rmSync(officialLibrary);write(env.CALLS,'');
+  assert.notEqual(run(native,['--rollback']).status,0);assert.equal(log(),'');
+  write(officialLibrary,'official');
+  ok(run(native,['--rollback']));assert.equal(git('rev-parse','HEAD'),stable);
+  assert.match(log(),/native familiar-desktop titlebars remove/);
+  assert.deepEqual(readShell(),shell);assert.equal(fs.readFileSync(env.LOADED,'utf8'),'true');
+  assert.ok(!fs.existsSync(receiptPath));assert.ok(!fs.existsSync(path.join(plugin,'bin/familiar-desktop')));
+  assert.equal(fs.readFileSync(officialLibrary,'utf8'),'official');
   console.log(`Development lifecycle (${architecture}) passed: integrity, clean source, stable/dev updates, initial setup, receipt binding, rollback, failed setup recovery and locking.`);
 } finally {fs.rmSync(temp,{recursive:true,force:true});}

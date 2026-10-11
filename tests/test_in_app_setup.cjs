@@ -88,6 +88,11 @@ try {
  assert.equal(run('status').status,0);
  r=run('install');assert.equal(r.status,0,r.stdout+r.stderr);
  assert.doesNotMatch(fs.readFileSync(log,'utf8'),/download-titlebars|titlebars setup|titlebars apply/);
+ // First-run development setup also accepts only the official-host backend.
+ write(path.join(state,'dev-build.json'),JSON.stringify({schemaVersion:1,channel:'development',sourceDirectory:root,commit:'1'.padStart(40,'0'),renderer:'omarchy',assets:{[`familiar-desktop-linux-${architecture}`]:sha(helper)}}));
+ write(path.join(state,'setup-pending'),'pending');write(log,'');
+ r=run('install');assert.equal(r.status,0,r.stdout+r.stderr);assert.equal(run('status').status,0);
+ assert.doesNotMatch(fs.readFileSync(log,'utf8'),/download-|titlebars setup|titlebars apply/);
  assert.equal(fs.readFileSync(officialLibrary,'utf8'),'official');
  console.log('In-app setup: fresh install, existing install, failure/retry, interrupted state, source refusal, corrupt bytes, and concurrency passed.');
 } finally { fs.rmSync(tmp,{recursive:true,force:true}); }

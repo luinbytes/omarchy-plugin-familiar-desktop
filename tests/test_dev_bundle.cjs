@@ -37,6 +37,16 @@ try {
  const armReceipt=JSON.parse(fs.readFileSync(path.join(temp,'arm/DEV-BUILD.json')));
  assert.equal(armReceipt.architecture,'aarch64');assert.equal(armReceipt.abi,'fixture');
  manifest.artifacts[1]={name:assets[1],sha256:digest(assets[1])};metadata();assert.notEqual(run('mixed').status,0);
+ // A single backend must explicitly declare Core ownership, never silently
+ // become a private-renderer bundle whose library is missing.
+ manifest.artifacts=armAssets.slice(0,1).map(name=>({name,sha256:digest(name)}));metadata();
+ assert.notEqual(run('missing-library').status,0);
+ manifest.renderer='omarchy';metadata();
+ const official=run('official');assert.equal(official.status,0,official.stderr);
+ const officialReceipt=JSON.parse(fs.readFileSync(path.join(temp,'official/DEV-BUILD.json')));
+ assert.equal(officialReceipt.renderer,'omarchy');assert.equal(officialReceipt.abi,null);
+ assert.deepEqual(Object.keys(officialReceipt.assets),[armAssets[0]]);
+ delete manifest.renderer;
  // Local builds record their own provenance and never invent a CI run.
  const source=path.join(temp,'local-source');fs.mkdirSync(source);
  for(const name of ['scripts/install-dev.sh','docs/DEVELOPMENT.md']) {
