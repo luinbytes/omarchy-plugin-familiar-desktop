@@ -130,8 +130,10 @@ they never invent a GitHub run or XPS acceptance record. Keep the bundle and its
 build evidence for review. The explicit source repository override permits a
 local checkout or contributor fork; the fetched commit must still match exactly.
 
-`--initial` is only for an installed Git plugin with no native binaries or
-titlebar ownership, including setup that previously stopped at the x86_64 check.
+`--initial` is only for an installed Git plugin with no native binaries or active
+titlebar hook, including setup that previously stopped at the x86_64 check.
+Private/foreign ownership is refused. A hook-free Core delegation receipt for this
+installation is preserved and permits retry after official-host initial rollback.
 It preserves personal preferences, snapshots the unfinished setup and stages
 verified native binaries. Open Familiar (enable it first if it was previously
 disabled) and start setup. On a private-renderer host choose Mac or Windows controls;

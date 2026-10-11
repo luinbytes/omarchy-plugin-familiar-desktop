@@ -39,9 +39,19 @@ while IFS= read -r ignored; do
 done < <(git -C "$plugin" ls-files --others --ignored --exclude-standard)
 if [[ "$initial" == true ]]; then
   config="${XDG_CONFIG_HOME:-$HOME/.config}"
-  for file in "$plugin/bin/familiar-desktop" "$plugin/bin/hyprbars" "$receipt" "$config/omarchy/familiar-titlebars/owner.json"; do
+  for file in "$plugin/bin/familiar-desktop" "$plugin/bin/hyprbars" "$receipt"; do
     [[ ! -e "$file" && ! -L "$file" ]] || { echo 'Initial development setup requires an installation without native binaries or titlebar ownership.' >&2; exit 1; }
   done
+  owner_file="$config/omarchy/familiar-titlebars/owner.json"
+  if [[ -e "$owner_file" || -L "$owner_file" ]]; then
+    # Official removal retains a delegation receipt to prevent a later private
+    # resurrection. A hook-free receipt for this source is safe for setup retry;
+    # private, foreign and symlinked ownership are not initial installations.
+    [[ "$official" == true && -f "$owner_file" && ! -L "$owner_file" ]] &&
+      jq -e --arg source "$plugin" '.source == $source and .backend == "omarchy"' "$owner_file" >/dev/null || {
+        echo 'Existing titlebar ownership; initial setup refused.' >&2; exit 1;
+      }
+  fi
   ! grep -qF -- '-- BEGIN Familiar Desktop title bars' "$config/hypr/looknfeel.lua" || { echo 'Existing titlebar hook; initial setup refused.' >&2; exit 1; }
 elif [[ "$mode" == install ]]; then
   installed_files=("$plugin/bin/familiar-desktop")
@@ -127,6 +137,7 @@ if [[ "$mode" == install ]]; then
     for marker in setup-pending bar-placement-pending; do
       [[ ! -e "$state/$marker" ]] || cp "$state/$marker" "$snapshot/$marker"
     done
+    [[ ! -f "$owner_file" ]] || cp "$owner_file" "$snapshot/titlebar-owner.json"
   fi
   [[ ! -e "$receipt" ]] || cp "$receipt" "$snapshot/dev-build.json"
   jq -n --arg previous "$current" --arg target "$source_sha" --arg source "$plugin" --argjson initial "$initial" --argjson official "$official" \
@@ -276,7 +287,13 @@ if [[ "$mode" == --rollback ]] && jq -e '.initial == true' "$snapshot/snapshot.j
   metadata="$receipt"
   if [[ ! -e "$receipt" ]]; then
     # An interrupted staging operation has never activated native controls.
-    [[ ! -e "$config/omarchy/familiar-titlebars/owner.json" ]] || exit 1
+    if [[ -f "$snapshot/titlebar-owner.json" ]]; then
+      # An inert Core delegation may predate this attempt. It must still be
+      # exactly the snapshot's receipt; never remove or rewrite later ownership.
+      cmp -s "$snapshot/titlebar-owner.json" "$config/omarchy/familiar-titlebars/owner.json" || exit 1
+    else
+      [[ ! -e "$config/omarchy/familiar-titlebars/owner.json" ]] || exit 1
+    fi
     ! grep -qF -- '-- BEGIN Familiar Desktop title bars' "$config/hypr/looknfeel.lua" || exit 1
     (cd "$bundle" && sha256sum --check --strict SHA256SUMS)
     verify_assets "$bundle" "$bundle/DEV-BUILD.json"

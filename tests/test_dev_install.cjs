@@ -36,7 +36,10 @@ if [[ "$1" == titlebars && "$2" == setup ]]; then
   echo '{"state":"ready"}'
 elif [[ "$1 $2" == 'titlebars apply' ]]; then echo '{"state":"active"}'
 elif [[ "$1 $2" == 'titlebars remove' ]]; then
-  rm -f "$HOME/.config/omarchy/familiar-titlebars/owner.json"
+  # Like the real helper, keep Core delegation even after removing our hook.
+  if ! jq -e '.backend == "omarchy"' "$HOME/.config/omarchy/familiar-titlebars/owner.json" >/dev/null 2>&1; then
+    rm -f "$HOME/.config/omarchy/familiar-titlebars/owner.json"
+  fi
   echo '' > "$HOME/.config/hypr/looknfeel.lua"
 fi
 `;
@@ -271,10 +274,31 @@ fs.writeFileSync(p,JSON.stringify(c));
   fs.rmSync(officialLibrary);write(env.CALLS,'');
   assert.notEqual(run(native,['--rollback']).status,0);assert.equal(log(),'');
   write(officialLibrary,'official');
+  const ownerPath=path.join(home,'.config/omarchy/familiar-titlebars/owner.json');
+  write(ownerPath,JSON.stringify({source:plugin,backend:'omarchy'}));
   ok(run(native,['--rollback']));assert.equal(git('rev-parse','HEAD'),stable);
   assert.match(log(),/native familiar-desktop titlebars remove/);
   assert.deepEqual(readShell(),shell);assert.equal(fs.readFileSync(env.LOADED,'utf8'),'true');
   assert.ok(!fs.existsSync(receiptPath));assert.ok(!fs.existsSync(path.join(plugin,'bin/familiar-desktop')));
   assert.equal(fs.readFileSync(officialLibrary,'utf8'),'official');
+  // Core's inert delegation survives rollback and must not strand onboarding.
+  const delegation=fs.readFileSync(ownerPath,'utf8');
+  ok(run(native,['--initial']));ok(run(native,['--rollback']));
+  assert.equal(fs.readFileSync(ownerPath,'utf8'),delegation);
+  assert.notEqual(run(native,['--initial'],{FAIL_CHECKOUT:'1'}).status,0);
+  const laterOwner=JSON.stringify({source:plugin,backend:'omarchy',instance:'later'});
+  write(ownerPath,laterOwner);
+  assert.notEqual(run(native,['--rollback']).status,0);
+  assert.equal(fs.readFileSync(ownerPath,'utf8'),laterOwner);
+  write(ownerPath,delegation);
+  ok(run(native,['--rollback']));assert.deepEqual(readShell(),shell);
+  assert.equal(fs.readFileSync(ownerPath,'utf8'),delegation);
+  // An unrelated owner or any live hook is still refused before disablement.
+  for(const owner of [{source:'/other',backend:'omarchy'},{source:plugin,backend:'familiar'}]) {
+    write(ownerPath,JSON.stringify(owner));write(env.CALLS,'');
+    assert.notEqual(run(native,['--initial']).status,0);assert.equal(log(),'');
+  }
+  write(ownerPath,delegation);write(path.join(home,'.config/hypr/looknfeel.lua'),'-- BEGIN Familiar Desktop title bars');
+  write(env.CALLS,'');assert.notEqual(run(native,['--initial']).status,0);assert.equal(log(),'');
   console.log(`Development lifecycle (${architecture}) passed: integrity, clean source, stable/dev updates, initial setup, receipt binding, rollback, failed setup recovery and locking.`);
 } finally {fs.rmSync(temp,{recursive:true,force:true});}

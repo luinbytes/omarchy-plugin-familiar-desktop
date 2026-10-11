@@ -120,6 +120,10 @@ baseline=439f97480bb0803f32137dcb700fbb939dc959ff
 plugin_id=io.github.tcballard.familiar-desktop
 state="$HOME/.local/state/familiar-desktop"
 rm -f "$helper"
+# remove deliberately retains Core's delegation receipt. Archive that earlier
+# test state to make this a genuinely fresh fixture, not a prior migrated owner.
+jq -e '.backend == "omarchy"' "$HOME/.config/omarchy/familiar-titlebars/owner.json"
+mv "$HOME/.config/omarchy/familiar-titlebars" "$EVIDENCE/renderer-phase-titlebars"
 git -C "$plugin" fetch --depth 1 https://github.com/tcballard/omarchy-plugin-familiar-desktop.git "$baseline"
 git -C "$plugin" checkout --detach "$baseline"
 node "$SMOKE_ROOT/tests/desktop/configure.cjs" "$OMARCHY_PATH" "$HOME"
@@ -154,8 +158,15 @@ wait_for native_ready
 bash "$bundle/install-dev.sh" --rollback
 [[ $(git -C "$plugin" rev-parse HEAD) == "$baseline" ]]
 [[ ! -e "$helper" && ! -e "$state/dev-build.json" && ! -e "$plugin/bin/hyprbars" ]]
+jq -e '.backend == "omarchy"' "$HOME/.config/omarchy/familiar-titlebars/owner.json"
 jq -e --arg id "$plugin_id" '.disabledPlugins | index($id) != null' "$HOME/.config/omarchy/shell.json"
 hyprctl eval "assert(familiar_titlebars == nil and hl.get_config('plugin.hyprbars.bar_height') == 30)" | grep -Fxq ok
 test -f /usr/lib/omarchy-hyprland-titlebars/titlebars.so
 hyprctl -j configerrors | jq -e 'all(.[]; . == "")'
+# A preserved, hook-free Core delegation must allow another explicit initial
+# staging attempt, including recovery from that still-unfinished installation.
+bash "$bundle/install-dev.sh" --initial
+[[ -f "$state/setup-pending" ]]
+bash "$bundle/install-dev.sh" --rollback
+[[ $(git -C "$plugin" rev-parse HEAD) == "$baseline" && ! -e "$helper" ]]
 echo 'PASS: official renderer, Core floating scope, Mac/Windows pointer controls, targeted actions, restore, reload, disable/removal, initial staging/setup and disabled-state rollback.'
