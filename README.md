@@ -42,9 +42,10 @@ Broader monitor, scaling and app coverage remains open; marketplace re-review is
 
 Window controls also download as a checksum-verified prebuilt Hyprbars library. The initial supported target is Linux x86_64, Hyprland 0.56.2 commit `efb50993780079460b0cbed1363e2166a2de1d9f`, ABI `efb50993780079460b0cbed1363e2166a2de1d9f_aq_0.15_hu_0.14_hg_0.5_hc_0.1_hlg_0.6`. Unsupported ABIs stop before backend installation or title-bar configuration. The normal installer never runs Hyprpm, clones Hyprland, or installs a compiler. Missing assets, checksum failures and loader failures stop setup; they never trigger a source build. Existing Hyprbars ownership protections still apply.
 
-ARM (Linux aarch64) contributors can build and test a source-bound native
-development bundle on their desktop, including first-run setup and rollback.
-See [native ARM development](docs/DEVELOPMENT.md#native-arm-development-on-the-target-desktop).
+ARM (Linux aarch64) contributors can download a source-bound static development
+bundle from CI for Omarchy's official titlebars, including first-run setup and
+rollback, without compiling on their desktop. Private-renderer hosts can build
+a matching native bundle locally. See [ARM development builds](docs/DEVELOPMENT.md#arm-ci-builds-with-official-titlebars).
 The current stable release still publishes x86_64 binaries only; ARM release
 assets and reviewed checksums require a separate maintainer release.
 

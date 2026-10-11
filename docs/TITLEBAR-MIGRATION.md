@@ -5,10 +5,11 @@ This supersedes the earlier native-only handoff which left those styles inactive
 No release or desktop acceptance is implied.
 
 `integration/v0.1.6-arm-titlebars` combines this work with k-kostin's native ARM
-development contribution (#85). Local official-host builds contain only the
-architecture-matched Familiar backend. Private-host builds still need a matching
-library/ABI pair. This provides local ARM development and first-run setup, not
-ordinary prebuilt ARM release installation. See [development setup](DEVELOPMENT.md).
+development contribution (#85). Official-host builds contain only the
+architecture-matched Familiar backend; CI now provides a static ARM development
+bundle as well as the local build path. Private-host builds still need a matching
+library/ABI pair, built locally on ARM. Both support first-run setup and rollback;
+ordinary prebuilt ARM release installation remains separate. See [development setup](DEVELOPMENT.md).
 
 ## What changes
 

@@ -45,7 +45,12 @@ try {
  const official=run('official');assert.equal(official.status,0,official.stderr);
  const officialReceipt=JSON.parse(fs.readFileSync(path.join(temp,'official/DEV-BUILD.json')));
  assert.equal(officialReceipt.renderer,'omarchy');assert.equal(officialReceipt.abi,null);
+ assert.equal(officialReceipt.architecture,'aarch64');assert.equal(officialReceipt.commit,sha);
+ assert.equal(officialReceipt.buildKind,'github-actions');assert.equal(officialReceipt.runId,'123');assert.equal(officialReceipt.runAttempt,'2');
  assert.deepEqual(Object.keys(officialReceipt.assets),[armAssets[0]]);
+ execFileSync('sha256sum',['--check','--strict','SHA256SUMS'],{cwd:path.join(temp,'official')});
+ manifest.artifacts.push({name:armAssets[1],sha256:digest(armAssets[1])});metadata();
+ assert.notEqual(run('official-with-private-library').status,0);
  delete manifest.renderer;
  // Local builds record their own provenance and never invent a CI run.
  const source=path.join(temp,'local-source');fs.mkdirSync(source);

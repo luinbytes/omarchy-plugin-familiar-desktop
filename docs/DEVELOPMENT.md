@@ -41,11 +41,15 @@ gh run list --repo tcballard/omarchy-plugin-familiar-desktop \
 ```
 
 The workflow runs the portable suite, QML checks and binary builds. Only after
-both reusable workflows succeed does it publish the `familiar-dev-SHA-RUN-ATTEMPT`
-artifact. It has matching static backend and Hyprbars binaries, an immutable
-source identity, an installer, checksums and build receipt. It creates no release,
-tag or version change. Artifacts expire after 30 days: keep the downloaded bundle
-and your acceptance evidence. Rebuilds are new evidence, even at the same SHA.
+both reusable workflows succeed does it publish the x86_64
+`familiar-dev-SHA-RUN-ATTEMPT` artifact, with matching static backend and Hyprbars
+binaries. A native ARM runner also tests and builds a static backend and publishes
+`familiar-dev-aarch64-SHA-RUN-ATTEMPT` after both portable architectures pass.
+That ARM bundle is for Omarchy's official renderer and contains no private library.
+Both bundles include an immutable source identity, installer, checksums and build
+receipt. They create no release, tag or version change. Artifacts expire after
+30 days: keep the downloaded bundle and your acceptance evidence. Rebuilds are
+new evidence, even at the same SHA.
 
 The PR path trigger also builds changes to the development/packaging pipeline.
 Runtime changes require live acceptance; repository branch protection is managed
@@ -94,13 +98,43 @@ for a clean matching checkout. In-app release repair is unavailable during dev
 testing; use this installer to update or roll back. Do not run the normal plugin
 updater during a development test; moving the source invalidates its receipt.
 
+## ARM CI builds with official titlebars
+
+On a Linux aarch64 desktop with Omarchy's official titlebar package installed,
+download the `familiar-dev-aarch64-SHA-RUN-ATTEMPT` artifact from a successful
+development or desktop-smoke workflow. This is an installable development bundle,
+not the raw GNU test binary uploaded by the portable checks. It uses the static
+`aarch64-unknown-linux-musl` backend, built and tested on a native ARM runner;
+no compiler is needed on your desktop. Core provides the renderer and its ABI.
+
+Use the download command above with this ARM artifact's exact name and producing
+run. From the downloaded directory:
+
+```bash
+sha256sum --check --strict SHA256SUMS
+cat DEV-BUILD.json
+bash install-dev.sh --initial
+```
+
+Use `--initial` only for an unfinished, registered Familiar source checkout. For
+an existing working development installation, omit `--initial`. Initial staging
+preserves activation and placement; open Familiar (enable it if it was previously
+disabled) and finish setup, then choose **Use Familiar controls**. Keep the bundle
+and printed snapshot; rollback is `bash install-dev.sh --rollback`.
+
+This bundle refuses private-renderer hosts before disabling or changing Familiar.
+Those hosts still need the local build below to match their installed Hyprland ABI.
+An ARM CI pass does not establish ARM desktop acceptance: record the actual
+desktop environment, receipt, scenarios and results for the exact artifact.
+
 ## Native ARM development on the target desktop
 
 The stable v0.1.5 release publishes x86_64 assets only. Adding ARM support to
 source does not publish ARM assets or authorize a release. The standalone stable
 recovery installer and release build/tag pipeline remain x86_64. ARM users can
-test an explicit local development bundle instead; the setup UI never compiles
-or installs system packages. Portable CI checks both x86_64 and aarch64.
+test the official-renderer CI bundle above or an explicit local development
+bundle; the setup UI never compiles or installs system packages. Portable CI
+checks both x86_64 and aarch64.
 
 On the target Linux aarch64 desktop, use Rust, Node, Git and readelf. When Omarchy's
 official titlebar package is installed, the local builder produces only Familiar's

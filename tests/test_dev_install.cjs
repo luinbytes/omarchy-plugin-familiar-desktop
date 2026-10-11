@@ -265,8 +265,12 @@ fs.writeFileSync(p,JSON.stringify(c));
   // Official ARM/x86 onboarding needs only the matching backend, with the same
   // guarded lifecycle and no private library or download. Rollback requires Core.
   shell.disabledPlugins=[];write(shellPath,JSON.stringify(shell));write(env.LOADED,'true');
-  write(officialLibrary,'official');
   const native=bundle(first,'native','omarchy');write(env.CALLS,'');
+  // CI's backend-only bundle must stop before disablement on a private host.
+  assert.notEqual(run(native,['--initial']).status,0);assert.equal(log(),'');
+  assert.equal(git('rev-parse','HEAD'),stable);assert.deepEqual(readShell(),shell);
+  assert.equal(fs.readFileSync(env.LOADED,'utf8'),'true');
+  write(officialLibrary,'official');
   ok(run(native,['--initial']));assert.deepEqual(readShell(),shell);
   assert.equal(status().status,3);ok(setup());ok(status());
   assert.ok(!fs.existsSync(path.join(plugin,'bin/hyprbars')));

@@ -6,6 +6,9 @@ on:
       artifact_name:
         description: Exact development artifact, including its producing attempt
         value: ${{ jobs.bundle.outputs.artifact_name }}
+      arm_artifact_name:
+        description: Static ARM development bundle for Omarchy's official renderer
+        value: ${{ jobs.arm_bundle.outputs.artifact_name }}
   workflow_dispatch:
   # Exercise the complete new pipeline before its first merge to main.
   pull_request:
@@ -26,6 +29,90 @@ jobs:
     uses: ./.github/workflows/portable.yml
   binaries:
     uses: ./.github/workflows/build-binaries.yml
+  arm_bundle:
+    name: ARM development bundle (official titlebars)
+    needs: checks
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
+    outputs:
+      artifact_name: ${{ steps.package.outputs.artifact_name }}
+    env:
+      BUILD_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BUILD_SOURCE_SHA }}
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.99.0
+          targets: aarch64-unknown-linux-musl
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install native ARM build dependencies
+        run: sudo apt-get update && sudo apt-get install -y musl-tools lua5.4 jq binutils
+      - name: Test and build static ARM backend
+        id: backend
+        run: |
+          test "$(uname -m)" = aarch64
+          target=aarch64-unknown-linux-musl
+          target_dir="$(mktemp -d "$RUNNER_TEMP/familiar-arm-target.XXXXXXXX")"
+          cargo test --manifest-path backend/Cargo.toml --locked --release --target "$target" --target-dir "$target_dir"
+          cargo build --manifest-path backend/Cargo.toml --locked --release --target "$target" --target-dir "$target_dir"
+          binary="$target_dir/$target/release/familiar-desktop"
+          readelf -h "$binary" | grep -E 'Machine:.*AArch64'
+          readelf -l -d "$binary" > "$RUNNER_TEMP/familiar-arm-elf.txt"
+          if awk '/NEEDED|INTERP/ {found=1} END {exit !found}' "$RUNNER_TEMP/familiar-arm-elf.txt"; then
+            echo 'ARM development backend unexpectedly requires shared libraries' >&2
+            exit 1
+          fi
+          test "$("$binary" --version)" = "familiar-desktop $(jq -r .version manifest.json)"
+          echo "path=$binary" >> "$GITHUB_OUTPUT"
+      - name: Package source-bound ARM development installer
+        id: package
+        env:
+          BACKEND_PATH: ${{ steps.backend.outputs.path }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$BUILD_SOURCE_SHA"
+          test -z "$(git status --porcelain --untracked-files=all)"
+          dir=downloaded/official-arm
+          mkdir -p "$dir"
+          asset=familiar-desktop-linux-aarch64
+          install -m755 "$BACKEND_PATH" "$dir/$asset"
+          digest="$(sha256sum "$dir/$asset" | cut -d' ' -f1)"
+          jq -n --arg sha "$BUILD_SOURCE_SHA" --arg version "$(jq -r .version manifest.json)" \
+            --arg name "$asset" --arg digest "$digest" \
+            '{version:$version,source:{commit:$sha},renderer:"omarchy",artifacts:[{name:$name,sha256:$digest}]}' \
+            > "$dir/RELEASE-MANIFEST.json"
+          (cd "$dir" && sha256sum "$asset" RELEASE-MANIFEST.json > SHA256SUMS)
+          node scripts/prepare-dev-bundle.cjs downloaded arm-dev-bundle
+          (cd arm-dev-bundle && sha256sum --check --strict SHA256SUMS)
+          echo "artifact_name=familiar-dev-aarch64-$BUILD_SOURCE_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.artifact_name }}
+          path: arm-dev-bundle/
+          retention-days: 30
+          if-no-files-found: error
+      - name: ARM installation instructions
+        env:
+          ARTIFACT_NAME: ${{ steps.package.outputs.artifact_name }}
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          ## ARM development build — official titlebars required
+          Source: \`$BUILD_SOURCE_SHA\`
+          Artifact: \`$ARTIFACT_NAME\`
+
+          Static aarch64 backend, tested natively. Core supplies the renderer.
+          On an unfinished registered Familiar checkout: \`bash install-dev.sh --initial\`, then finish setup in Familiar.
+          On an existing development install: \`bash install-dev.sh\`.
+          Rollback: \`bash install-dev.sh --rollback\`; retain the printed snapshot.
+
+          Private-renderer ARM hosts still need a local matching-ABI build.
+          This is not a stable release or ARM desktop acceptance.
+          EOF
   bundle:
     needs: [checks, binaries]
     runs-on: ubuntu-latest
