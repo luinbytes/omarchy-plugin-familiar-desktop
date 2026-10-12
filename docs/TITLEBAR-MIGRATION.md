@@ -33,8 +33,11 @@ compatibility; it does not disable Core's own bars. Saved preferences survive.
 
 The reference is Core [#14482](https://github.com/omacom/omarchy/pull/14482), commit
 `14987189695a8ae1f2270262fdf77446fafb1ba3`, merged 11 October 2026, and the official
-renderer [v0.2.0](https://github.com/omacom/omarchy-hyprland-titlebars/tree/v0.2.0)
-packaged by [#957](https://github.com/omacom/omarchy-pkgs/pull/957).
+renderer [v0.2.1](https://github.com/omacom/omarchy-hyprland-titlebars/tree/v0.2.1)
+packaged by [#964](https://github.com/omacom/omarchy-pkgs/pull/964). This renderer
+defaults to disabled when its configuration disappears; Core explicitly enables
+it for floating workspaces. A manually loaded renderer can remain loaded after
+configuration removal, unlike the config-owned lifetime exercised separately.
 
 Core currently has no per-consumer button-list API. Familiar therefore uses a
 small, explicitly tested **compatibility adapter**, not an advertised Core
@@ -85,9 +88,14 @@ Rust tests cover migration/session gates, transactional recovery, stale owners,
 explicit targets and source guards. Lua tests execute the unmodified Core module
 for Mac/Windows, tiled/floating workspaces, first load, changed Core, Core errors,
 multiple backends and late includes. The desktop CI matrix adds the actual Core
-revision and an unmodified official v0.2.0 renderer built against the guest's
+revision and an unmodified official v0.2.1 renderer built against the guest's
 Hyprland headers. Its dedicated test exercises real pointer buttons, minimise/
 restore, reload, disable, removal and returning to tiling, and saves screenshots.
+It also retains a manually loaded renderer while removing all titlebar
+configuration, compares maximized client geometry against a no-renderer baseline,
+then restores Core/Familiar configuration and clicks the restored minimise
+button. Plugin identity and screenshots accompany those assertions; merely
+unloading the library cannot satisfy the retained-renderer case.
 This source-build test is not evidence of the published pacman artifact's delivery.
 
 Record CI outcomes and exact artifact identity in the draft PR. Before merge,

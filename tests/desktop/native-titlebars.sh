@@ -106,11 +106,87 @@ phase=native-remove
 "$helper" titlebars remove | jq -e '.state == "removed"'
 hyprctl eval "assert(familiar_titlebars == nil and hl.get_config('plugin.hyprbars.bar_height') == 30)"
 test -f /usr/lib/omarchy-hyprland-titlebars/titlebars.so
-# Returning to tiling is still Core's responsibility and unloads its renderer.
+# Returning to tiling unloads this config-loaded renderer. A manually loaded
+# renderer has a different lifetime, exercised separately below.
 echo 'o.workspace_mode({ default = "dwindle" })' > "$HOME/.local/state/omarchy/workspace-layouts/default.lua"
 hyprctl reload
 unloaded() { hyprctl -j plugin list | jq -e 'length == 0' >/dev/null; }
 wait_for unloaded
+
+phase=native-retained-renderer
+# Establish the maximized client geometry with no renderer at all. These are
+# disposable test windows, not the user's desktop or personal configuration.
+hyprctl dispatch "hl.dsp.window.float({ action = 'enable', window = 'address:$b' })"
+hyprctl dispatch "hl.dsp.window.fullscreen({ mode = 'maximized', action = 'set', window = 'address:$b' })"
+maximized_b() { hyprctl -j clients | jq -e --arg b "$b" 'any(.[]; .address == $b and .floating and .fullscreen == 1)' >/dev/null; }
+wait_for maximized_b
+hyprctl -j clients | jq -e --arg b "$b" '.[] | select(.address == $b) | {at, size}' > "$EVIDENCE/native-no-renderer-geometry.json"
+
+# CLI-loaded plugins survive when config stops asking for them. Load before
+# Core requests it so the test cannot pass just because Core unloaded the .so.
+"$helper" titlebars migrate | tee "$EVIDENCE/native-retained-migrate.json" | jq -e '.state == "ready"'
+"$helper" titlebars apply --mode mac --owner 300-retained | jq -e '.state == "configured"'
+hyprctl plugin load /usr/lib/omarchy-hyprland-titlebars/titlebars.so
+renderer_loaded() { hyprctl -j plugin list | jq -e 'length == 1 and .[0].name == "hyprbars"' >/dev/null; }
+wait_for renderer_loaded
+echo 'o.workspace_mode({ default = "floating" })' > "$HOME/.local/state/omarchy/workspace-layouts/default.lua"
+hyprctl reload
+wait_for native_ready
+hyprctl -j plugin list > "$EVIDENCE/native-retained-plugins.json"
+bar_space_reserved() {
+  hyprctl -j clients | jq -e --arg b "$b" --slurpfile baseline "$EVIDENCE/native-no-renderer-geometry.json" \
+    'any(.[]; .address == $b and .fullscreen == 1 and .at[1] > $baseline[0].at[1] and .size[1] < $baseline[0].size[1])' >/dev/null
+}
+wait_for bar_space_reserved
+
+phase=native-unconfigured-renderer
+config="$HOME/.config/hypr/hyprland.lua"
+cp "$config" "$EVIDENCE/native-configured.lua"
+# Omit both configuration consumers; leave the loaded library alone. No
+# explicit enabled=false: 0.2.1's safe default is the behaviour under test.
+sed -e '/^require("hypr.looknfeel")$/d' -e '/^require("default.hypr.workspace-layouts")$/d' \
+  "$EVIDENCE/native-configured.lua" > "$config"
+hyprctl reload
+renderer_unconfigured() {
+  hyprctl eval "assert(hl.get_config('plugin.hyprbars.enabled') == false and hl.get_config('plugin.hyprbars.workspace_tag') == '')" | grep -Fxq ok
+}
+wait_for renderer_unconfigured
+hyprctl -j plugin list | tee "$EVIDENCE/native-unconfigured-plugins.json" | jq -e 'length == 1 and .[0].name == "hyprbars"'
+cmp "$EVIDENCE/native-retained-plugins.json" "$EVIDENCE/native-unconfigured-plugins.json"
+no_bar_space() {
+  hyprctl -j clients | jq -e --arg b "$b" --slurpfile baseline "$EVIDENCE/native-no-renderer-geometry.json" \
+    'any(.[]; .address == $b and .fullscreen == 1 and {at, size} == $baseline[0])' >/dev/null
+}
+wait_for no_bar_space
+hyprctl -j clients > "$EVIDENCE/native-unconfigured-clients.json"
+grim "$EVIDENCE/native-unconfigured.png"
+
+phase=native-reenable-retained-renderer
+cp "$EVIDENCE/native-configured.lua" "$config"
+hyprctl reload
+wait_for native_ready
+wait_for bar_space_reserved
+hyprctl eval "assert(hl.get_config('plugin.hyprbars.enabled') == true and hl.get_config('plugin.hyprbars.bar_height') == 34)" | grep -Fxq ok
+hyprctl dispatch "hl.dsp.window.fullscreen({ mode = 'maximized', action = 'unset', window = 'address:$b' })"
+hyprctl dispatch "hl.dsp.window.resize({ x = 450, y = 320, window = 'address:$b' })"
+hyprctl dispatch "hl.dsp.window.move({ x = 60, y = 320, window = 'address:$b' })"
+# Real pointer input proves the restored Familiar control is functional.
+"$probe/pointer" 106 303 1280 800 272
+minimized_b() { hyprctl -j clients | jq -e --arg b "$b" 'any(.[]; .address == $b and .workspace.name == "special:minimized")' >/dev/null; }
+wait_for minimized_b
+"$helper" dock activate-instance "$b"
+restored_b() { hyprctl -j clients | jq -e --arg b "$b" 'any(.[]; .address == $b and .workspace.name == "1")' >/dev/null; }
+wait_for restored_b
+grim "$EVIDENCE/native-reenabled.png"
+"$helper" titlebars remove | jq -e '.state == "removed"'
+echo 'o.workspace_mode({ default = "dwindle" })' > "$HOME/.local/state/omarchy/workspace-layouts/default.lua"
+hyprctl reload
+wait_for renderer_unconfigured
+wait_for renderer_loaded
+# Only the disposable test owns this manual load and its matching cleanup.
+hyprctl plugin unload /usr/lib/omarchy-hyprland-titlebars/titlebars.so
+wait_for unloaded
+echo 'PASS: retained renderer defaults off without configuration, reserves no titlebar space, and restores working Familiar controls when re-enabled.'
 hyprctl -j configerrors | jq -e 'all(.[]; . == "")'
 # Exercise the production installer on an enabled, unfinished v0.1.5 checkout.
 # The renderer checks above intentionally run without the shell's controller;

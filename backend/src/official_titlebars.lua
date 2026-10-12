@@ -1,4 +1,4 @@
--- Familiar's compatibility adapter for Core #14482 / titlebars v0.2.0.
+-- Familiar's compatibility adapter for Core #14482 / titlebars v0.2.1.
 -- Not a Core extension API: fail back to Core if its button contract changes.
 -- This runs from looknfeel, before default.hypr.toggles applies workspace modes.
 local status = { state = "waiting" }
