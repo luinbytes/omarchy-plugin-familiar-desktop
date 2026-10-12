@@ -34,7 +34,7 @@ try {
   write(script,source.replace("repository='https://github.com/tcballard/omarchy-plugin-familiar-desktop.git'",`repository='${remote}'`).replace('@SOURCE_SHA@',pin));
   // For upgrade checkout fault, begin on the wrong commit so a no-op is detected.
   if(existing&&fault==='checkout')git(['checkout','--detach',moved],plugin);
-  const r=spawnSync('bash',[script,'windows'],{encoding:'utf8',env:{...process.env,HOME:home,PATH:tools+':/usr/bin:/bin',LOG:log,PLUGIN:plugin,REAL_GIT:realGit,PIN:pin,MOVED:moved,FAULT:fault}});
+  const r=spawnSync('bash',[script,'windows'],{encoding:'utf8',env:{...process.env,HOME:home,XDG_CONFIG_HOME:path.join(home,'.config'),XDG_STATE_HOME:path.join(home,'.local/state'),PATH:tools+':/usr/bin:/bin',LOG:log,PLUGIN:plugin,REAL_GIT:realGit,PIN:pin,MOVED:moved,FAULT:fault}});
   const events=fs.existsSync(log)?fs.readFileSync(log,'utf8'):'';
   assert.doesNotMatch(events,/UNREVIEWED-EXECUTED/);
   if(fault){assert.notEqual(r.status,0,r.stderr);assert.doesNotMatch(events,/trusted-backend|trusted-titlebars|plugin enable/);if(!existing)assert.doesNotMatch(events,/plugin add/);}
