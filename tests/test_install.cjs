@@ -8,10 +8,14 @@ const {spawnSync} = require('node:child_process');
 const template = fs.readFileSync(path.resolve(__dirname, '../install.sh'), 'utf8');
 const sourceSha = 'bda1ec617966b11fb8470788c74019350b38838f';
 let passed = 0;
-function run({existing=false, dirty=false, repair=false, failRepair=false, missing=false, style='mac', fault='', arch='x86_64', noCompiler=false, badAbi=false, titlebarFault='', lifecycle='', oldVersion='0.1.0', ignored='', flaky='' }={}) {
+function run({existing=false, dirty=false, repair=false, failRepair=false, missing=false, style='mac', fault='', arch='x86_64', noCompiler=false, badAbi=false, titlebarFault='', lifecycle='', oldVersion='0.1.0', ignored='', flaky='', official=false }={}) {
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'familiar-install-'));
  try {
-  const installer=path.join(root,'install.sh');fs.writeFileSync(installer,template.replace('@SOURCE_SHA@',sourceSha));
+  // Adapt nixfred's official-package fixture to v0.1.6's supported renderer.
+  const officialLibrary=path.join(root,'official/titlebars.so');
+  if(official){fs.mkdirSync(path.dirname(officialLibrary));fs.writeFileSync(officialLibrary,'official package');}
+  const withOfficial=source=>source.replaceAll('/usr/lib/omarchy-hyprland-titlebars/titlebars.so',officialLibrary);
+  const installer=path.join(root,'install.sh');fs.writeFileSync(installer,withOfficial(template.replace('@SOURCE_SHA@',sourceSha)));
   const bin=path.join(root,'bin');fs.mkdirSync(bin);
   const plugin=path.join(root,'.config/omarchy/plugins/io.github.tcballard.familiar-desktop');
   // Bar placement reads XDG paths; keep them inside this fixture home, never the developer's desktop.
@@ -21,7 +25,7 @@ function run({existing=false, dirty=false, repair=false, failRepair=false, missi
   fs.writeFileSync(path.join(fixture,'manifest.json'),'{}');
   fs.copyFileSync('bar-placement.sh',path.join(fixture,'bar-placement.sh'));
   fs.copyFileSync(path.resolve(__dirname,'../install-backend.sh'),path.join(fixture,'install-backend.sh'));
-  fs.copyFileSync(path.resolve(__dirname,'../install-titlebars.sh'),path.join(fixture,'install-titlebars.sh'));
+  fs.writeFileSync(path.join(fixture,'install-titlebars.sh'),withOfficial(fs.readFileSync(path.resolve(__dirname,'../install-titlebars.sh'),'utf8')));
   fs.writeFileSync(path.join(fixture,'build.sh'),'echo forbidden-build >> "$LOG"; exit 99\n');
   const old='previous backend';fs.writeFileSync(path.join(fixture,'bin/familiar-desktop'),old);
   const asset=path.join(root,'asset');
@@ -51,6 +55,7 @@ function run({existing=false, dirty=false, repair=false, failRepair=false, missi
   const log=path.join(root,'calls');
   const p=spawnSync('/bin/bash',[installer,style],{encoding:'utf8',env:{...process.env,HOME:root,XDG_CONFIG_HOME:path.join(root,'.config'),XDG_STATE_HOME:path.join(root,'.local/state'),PATH:bin+':/usr/bin:/bin',LOG:log,PLUGIN:plugin,FIXTURE:fixture,ASSET:asset,SUMS:path.join(root,'sums'),FAULT:fault,LIFECYCLE:lifecycle,IGNORED:ignored,TITLEBAR_FAULT:titlebarFault,TITLEBAR:titlebar,ABI:badAbi?'unsupported':abi,ARCH:arch,DIRTY:+dirty+'',REPAIR:+repair+'',FAIL_REPAIR:+failRepair+'',MISSING:+missing+'',FLAKY:flaky}});
   const binary=path.join(plugin,'bin/familiar-desktop');
+  if(official)assert.equal(fs.readFileSync(officialLibrary,'utf8'),'official package');
   return {...p,log:fs.existsSync(log)?fs.readFileSync(log,'utf8'):'',binary:fs.existsSync(binary)?fs.readFileSync(binary,'utf8'):null,staging:fs.existsSync(path.dirname(binary))?fs.readdirSync(path.dirname(binary)).filter(n=>n.startsWith('.download')):[]};
  }finally{fs.rmSync(root,{recursive:true,force:true});}
 }
@@ -112,3 +117,17 @@ for(const ignored of ['notes.qml','bin/.download.old/asset']) {
 const incompatible=run({existing:true,lifecycle:'success',badAbi:true});
 assert.doesNotMatch(incompatible.log,/plugin add|old-helper|plugin disable|checkout/);
 console.log('14 update lifecycle scenarios passed: old-version migration, restore/unload ordering, unmanaged/untracked/ignored files, Git errors, ABI refusal and failed checkout.');
+// Official hosts use the verified Familiar helper and leave Core's renderer
+// alone, including when its ABI differs from Familiar's private release.
+for(const existing of [false,true]) {
+ const result=run({existing,lifecycle:existing?'success':'',oldVersion:'0.1.5',official:true,badAbi:true});
+ assert.equal(result.status,0,result.stderr);
+ assert.match(result.log,/plugin enable/);
+ assert.doesNotMatch(result.log,/hyprbars-linux|helper titlebars setup/);
+ assert.match(result.stdout,/Choose Use Familiar controls/);
+ if(existing)assert.match(result.log,/old-helper desktop restore\nold-helper titlebars disable/);
+ const failed=run({existing,official:true,badAbi:true,fault:'corrupt'});
+ assert.notEqual(failed.status,0);
+ assert.doesNotMatch(failed.log,/plugin enable|hyprbars-linux|helper titlebars setup/);
+}
+console.log('Official renderer: fresh/update success across private ABI mismatch, unchanged package and corrupt-backend refusal passed.');
