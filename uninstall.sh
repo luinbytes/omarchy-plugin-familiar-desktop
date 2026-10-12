@@ -26,4 +26,8 @@ omarchy plugin disable "$plugin_id"
 "$helper" titlebars remove
 # Only delete the plugin after owned hooks are removed and reload is verified.
 omarchy plugin remove "$plugin_id" --yes
+# The development receipt binds binaries to the checkout just removed. Kept, it
+# makes a later stable installation fail setup readiness and refuse in-app setup.
+# Development snapshots remain for manual recovery.
+rm -f -- "${XDG_STATE_HOME:-$HOME/.local/state}/familiar-desktop/dev-build.json"
 echo 'Familiar removed. Personal configuration is preserved; preferences and recovery backups are retained.'
