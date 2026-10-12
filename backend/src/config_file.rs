@@ -58,9 +58,15 @@ pub fn replace(
     Ok(Some(backup_path))
 }
 
+// Marker namespaces can overlap (INPUT, INPUT command, INPUT resize).
+// Count complete marker lines so one preference cannot claim another's hook.
+pub fn has_marker(text: &str, marker: &str) -> bool {
+    text.lines().any(|line| line.trim() == marker)
+}
+
 pub fn strip_exact(text: &str, begin: &str, end: &str, block: &str) -> Result<String> {
-    let starts = text.matches(begin).count();
-    let ends = text.matches(end).count();
+    let starts = text.lines().filter(|line| line.trim() == begin).count();
+    let ends = text.lines().filter(|line| line.trim() == end).count();
     if starts == 0 && ends == 0 {
         return Ok(text.into());
     }

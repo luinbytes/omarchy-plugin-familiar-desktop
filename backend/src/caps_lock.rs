@@ -92,7 +92,9 @@ fn generated_content(paths: &Paths) -> Result<Option<String>> {
 }
 
 pub fn split_current(value: &str, paths: &Paths) -> Result<(String, String)> {
-    if value.contains("-- BEGIN FAMILIAR INPUT") || value.contains("-- END FAMILIAR INPUT") {
+    if config_file::has_marker(value, "-- BEGIN FAMILIAR INPUT")
+        || config_file::has_marker(value, "-- END FAMILIAR INPUT")
+    {
         let clean = crate::config_file::strip_exact(
             value,
             "-- BEGIN FAMILIAR INPUT",

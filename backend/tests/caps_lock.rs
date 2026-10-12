@@ -105,6 +105,54 @@ fn choices_persist_preserve_personal_content_and_reset_exactly() {
 }
 
 #[test]
+fn caps_lock_coexists_with_command_and_resize_preferences() {
+    use familiar_desktop::{input_preferences, window_mode};
+    for caps_first in [false, true] {
+        let (_dir, p) = fixture();
+        let original = fs::read_to_string(&p.config).unwrap();
+        let mut h = FakeHypr::default();
+        if caps_first {
+            caps_lock::change("normal", &p, &mut h).unwrap();
+        }
+        let mut other_paths = Vec::new();
+        for kind in ["command", "resize"] {
+            let other = window_mode::Paths {
+                config: p.config.clone(),
+                manifest: p.manifest.clone(),
+                state: p.state.with_file_name(kind),
+                generated: p.generated.with_file_name(format!("{kind}.lua")),
+            };
+            input_preferences::change(kind, "enable", &other, &mut h).unwrap();
+            other_paths.push((kind, other));
+        }
+        if !caps_first {
+            caps_lock::change("normal", &p, &mut h).unwrap();
+        }
+        assert_eq!(
+            caps_lock::change("status", &p, &mut h).unwrap()["mode"],
+            "normal"
+        );
+        caps_lock::change("compose", &p, &mut h).unwrap();
+        caps_lock::change("reset", &p, &mut h).unwrap();
+        let expected = other_paths
+            .iter()
+            .fold(original.clone(), |text, (kind, other)| {
+                text + &input_preferences::include(kind, other)
+            });
+        assert_eq!(fs::read_to_string(&p.config).unwrap(), expected);
+        assert!(!p.generated.exists());
+        for (kind, other) in other_paths {
+            assert_eq!(
+                fs::read_to_string(&other.generated).unwrap(),
+                input_preferences::hook(kind, &p.manifest).unwrap()
+            );
+            input_preferences::change(kind, "reset", &other, &mut h).unwrap();
+        }
+        assert_eq!(fs::read_to_string(&p.config).unwrap(), original);
+    }
+}
+
+#[test]
 fn reset_preserves_later_user_edits_and_handles_no_trailing_newline() {
     let (_dir, p) = fixture();
     fs::write(&p.config, "-- no trailing newline").unwrap();
