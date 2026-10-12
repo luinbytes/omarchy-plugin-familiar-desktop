@@ -7,7 +7,7 @@ import qs.Commons
 import qs.Commons as Commons
 import qs.Ui
 import "../DockModel.js" as DockModel
-import "../DockDrag.js" as Drag
+import "../DockDrag.js" as DockDrag
 import ".."
 
 PanelWindow {
@@ -341,7 +341,7 @@ PanelWindow {
                         Item {
                             id: subItemRoot
                             readonly property int totalSub: (stackWindow.root.activeStackItem && stackWindow.root.activeStackItem.subApps) ? stackWindow.root.activeStackItem.subApps.length : 0
-                            readonly property int visualSubSlot: (stackWindow.root.folderDragActiveIndex === index) ? index : Drag.visualSlot(index, stackWindow.root.folderDragActiveIndex, stackWindow.root.folderDragTargetIndex)
+                            readonly property int visualSubSlot: (stackWindow.root.folderDragActiveIndex === index) ? index : DockDrag.visualSlot(index, stackWindow.root.folderDragActiveIndex, stackWindow.root.folderDragTargetIndex)
                             readonly property int slotCol: visualSubSlot % stackCard.gridCols
                             readonly property int slotRow: Math.floor(visualSubSlot / stackCard.gridCols)
 

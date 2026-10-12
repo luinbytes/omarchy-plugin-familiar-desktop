@@ -8,7 +8,7 @@ import qs.Commons as Commons
 import qs.Ui
 import "DockModel.js" as DockModel
 import "IconResolver.js" as Icons
-import "DockDrag.js" as Drag
+import "DockDrag.js" as DockDrag
 import "components"
 
 Item {
@@ -510,7 +510,7 @@ Item {
                     dragOffset.y = 0
                 }
 
-                var target = Drag.railTarget(root.itemIndex, root.totalCount, root.slotSize,
+                var target = DockDrag.railTarget(root.itemIndex, root.totalCount, root.slotSize,
                     root.isVertical ? dragOffset.y : dragOffset.x, root.itemData && !root.itemData.isStack)
                 root.isMergeActive = target.merge
                 root.dragHoverChanged(root.itemIndex, target.index, target.merge)
@@ -521,7 +521,7 @@ Item {
             longPressTimer.stop()
             if (root.isDragging) {
                 root.isDragging = false
-                var target = Drag.railTarget(root.itemIndex, root.totalCount, root.slotSize,
+                var target = DockDrag.railTarget(root.itemIndex, root.totalCount, root.slotSize,
                     root.isVertical ? dragOffset.y : dragOffset.x, root.itemData && !root.itemData.isStack)
 
                 root.isMergeActive = false
