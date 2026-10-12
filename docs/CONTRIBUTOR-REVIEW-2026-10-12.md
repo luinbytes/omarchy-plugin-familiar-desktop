@@ -32,10 +32,12 @@ Product version and stable binary pins are unchanged.
 | #91: drag cleanup during destruction | Include | A destroyed MouseArea can leave the service drag index active. Emit cancellation from the owning tile's destruction; do not perform a drop or reorder. QtTest covers the real tile and shared drag state, not the full compositor. |
 | #91: per-window CLI scan protocol | Defer from this candidate | The direction is useful, but the new regression is not in `tests/run`, and evidence can remain stale or ambiguous as detailed below. Keep this change separate from the release fixes. |
 
-Fred Nix (`nixfred`) authored the seven selected commits; cherry-picks retain
-his author metadata and original SHA trailers. The standalone/repair adaptation
-credits his official-package fixture as a co-authored correction. Kirill Kostin's
-ARM authorship remains in #86's preserved history. No original PR is closed or
+Fred Nix (`nixfred`) authored the seven selected commits. Local cherry-picks
+retain his author metadata and original SHA trailers; connector-published
+commits retain the source SHA trailers and credit him with `Co-authored-by`
+because this environment has no authenticated Git push. The standalone/repair
+adaptation also credits his official-package fixture. Kirill Kostin's ARM
+authorship remains in #86's preserved history. No original PR is closed or
 represented as fully merged by this integration.
 
 ## CLI attribution findings in #91
@@ -94,10 +96,14 @@ attempt. Passing historical #84/#86 runs cannot certify this combined source.
 
 Local shell syntax/diff hygiene and the installer, source-identity, uninstall,
 repair and both architecture-parameterised in-app setup fixtures passed. Rust
-formatting and Clippy passed. The first focused Rust run reached 15 passing Caps
-Lock tests and stopped on two missing-Lua prerequisites; later results belong
-in the integration PR's evidence record. Qt/compositor and ARM execution are
-not established by the local x86_64 fixtures. No passing full suite is inferred.
+formatting and Clippy passed. After building the workflow-pinned Lua 5.5.0, all
+99 focused Rust tests passed across `caps_lock`, `config_file`,
+`config_transactions`, `dock`, `input_preferences` and `titlebars`. The full
+Rust suite stopped at the unchanged `force_quit` process-visibility test with
+`Application has exited`, consistent with the earlier branch's documented host
+limitation. Qt dependencies could not be installed in this host. Qt/compositor
+and ARM execution are not established by the local x86_64 fixtures. No passing
+full suite is inferred; the current CI result remains required.
 
 ## Acceptance still required
 
