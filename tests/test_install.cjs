@@ -87,12 +87,14 @@ console.log('ABI mismatch, corrupt/missing Hyprbars, and loader rejection fail w
 
 // Update ordering and refusal paths: old windows/controls must be recovered
 // before source checkout; failures must not enable a partial installation.
-for (const oldVersion of ['0.1.0', '0.0.6']) {
+// Every helper since 0.1.0 has `desktop restore`; only 0.0.x predates it.
+for (const oldVersion of ['0.1.0', '0.1.4', '0.0.6']) {
  const result=run({existing:true,lifecycle:'success',oldVersion,ignored:'bin/familiar-desktop\nbin/hyprbars/abi/hyprbars.so\nbackend/target/debug/build-output'});
  assert.equal(result.status,0,result.stderr);
  const events=['old-helper titlebars disable','omarchy plugin disable','checkout --detach','helper titlebars setup','omarchy plugin enable'];
- if(oldVersion==='0.1.0')events.unshift('old-helper desktop restore');
+ if(oldVersion!=='0.0.6')events.unshift('old-helper desktop restore');
  else assert.doesNotMatch(result.log,/old-helper desktop restore/);
+ for(const event of events)assert.ok(result.log.includes(event),`${oldVersion}: missing ${event}`);
  for(let i=1;i<events.length;i++)assert.ok(result.log.indexOf(events[i-1])<result.log.indexOf(events[i]),events.join(' -> '));
 }
 for (const lifecycle of ['unmanaged','untracked','status-failure','ignored-failure','fetch-failure','wrong-source','wrong-checkout','restore-failure','unload-failure','checkout-failure','dirty-after-checkout']) {

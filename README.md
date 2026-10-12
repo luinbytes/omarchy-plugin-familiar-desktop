@@ -36,7 +36,7 @@ Setup requires the standard Omarchy tools (including curl, jq and coreutils), Li
 
 The [v0.1.5 release](https://github.com/tcballard/omarchy-plugin-familiar-desktop/releases/tag/v0.1.5) also includes a standalone installer and checksums for recovery. Normal setup uses the native plugin command above.
 
-The installer refuses local source changes, untracked files and unexpected ignored files. It checks compatibility, restores windows on v0.1.0 updates, unloads controls and disables Familiar before checkout, then verifies binaries before setup and enablement. A failed update stops for repair. Missing download tools may prompt for a package-manager password.
+The installer refuses local source changes, untracked files and unexpected ignored files. It checks compatibility, restores Show Desktop windows when updating from v0.1.0 or later, unloads controls and disables Familiar before checkout, then verifies binaries before setup and enablement. A failed update stops for repair. Missing download tools may prompt for a package-manager password.
 
 Broader monitor, scaling and app coverage remains open; marketplace re-review is pending. On the v0.1.6 development branch, choose **Use Familiar controls** to apply Mac/Windows styling and close/minimise/maximise through Omarchy’s official renderer. Core retains its floating-workspace scope; choosing **Omarchy** restores its defaults. This requires desktop acceptance before release; see [migration details](docs/TITLEBAR-MIGRATION.md) and #74. The curated app collection is planned for v0.2.0; installed apps continue to work with the dock.
 

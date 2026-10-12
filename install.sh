@@ -85,7 +85,8 @@ git -C "$plugin_dir" fetch --no-tags "$repository" "$release_sha"
 helper="$plugin_dir/bin/familiar-desktop"
 if [[ -x "$helper" ]]; then
   previous_version="$("$helper" --version)"
-  if [[ "$previous_version" == 'familiar-desktop 0.1.0'* ]]; then
+  # Helpers since 0.1.0 can restore Show Desktop windows; 0.0.x predates the command.
+  if [[ "$previous_version" != 'familiar-desktop 0.0.'* ]]; then
     "$helper" desktop restore
   fi
   "$helper" titlebars disable
