@@ -33,7 +33,14 @@ Item {
 
     signal previewHoverChanged(var item, bool hovered)
     signal previewCancelled()
-    Component.onDestruction: previewHoverChanged(root, false)
+    // A rebuild swaps dockItems out from under an active drag. Destroying the
+    // MouseArea does not emit released or canceled, so the panel never hears
+    // dragEnded and the rail stays in drag mode (blank cursor, held slots).
+    Component.onDestruction: {
+        previewHoverChanged(root, false)
+        if (isDragging)
+            dragEnded()
+    }
     signal itemLeftClicked(var itemData)
     signal itemRightClicked(var itemData, var itemItem)
     signal moveRequested(int fromIndex, int toIndex)
