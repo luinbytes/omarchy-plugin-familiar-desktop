@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Repair only this installed source; never resolve a remote tag or replace code.
 set -Eeuo pipefail
-root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 plugin_id='io.github.tcballard.familiar-desktop'
 installed="$HOME/.config/omarchy/plugins/$plugin_id"
 style="${1:-windows}"

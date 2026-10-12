@@ -13,5 +13,11 @@ try {
   if(failure)assert.doesNotMatch(calls,/plugin enable/);else assert.match(calls,/setup --library \/fixture\/hyprbars.so --enable --style mac/);
  }
  fs.writeFileSync(log,'');const r=spawnSync('bash',[path.join(root,'repair.sh')],{env:{...process.env,HOME:tmp,PATH:bin+':'+process.env.PATH,LOG:log,DIRTY:'1'}});assert.notEqual(r.status,0);assert.doesNotMatch(fs.readFileSync(log,'utf8'),/install-backend|plugin disable/);
+ // Reached through a symlinked home, the installed checkout is still this checkout (as uninstall.sh accepts).
+ const link=path.join(tmp,'home-link');fs.symlinkSync(tmp,link);
+ {
+  fs.writeFileSync(log,'');const linked=spawnSync('bash',[path.join(link,'.config/omarchy/plugins/io.github.tcballard.familiar-desktop/repair.sh'),'mac'],{encoding:'utf8',env:{...process.env,HOME:link,PATH:bin+':'+process.env.PATH,LOG:log,FAIL:''}});
+  assert.equal(linked.status,0,linked.stderr);assert.match(fs.readFileSync(log,'utf8'),/setup --library \/fixture\/hyprbars.so --enable --style mac/);
+ }
  console.log('Repair: same checkout, setup success, failure stops and dirty source refusal passed.');
 }finally{fs.rmSync(tmp,{recursive:true,force:true});}

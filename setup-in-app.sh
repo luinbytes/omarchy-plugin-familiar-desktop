@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Explicit, user-started setup. Never reload the shell hosting the setup screen.
 set -Eeuo pipefail
-root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 mode="${1:-status}"
 style="${2:-windows}"
 [[ "$mode" == status || "$mode" == install ]] || exit 2

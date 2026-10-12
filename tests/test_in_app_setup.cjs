@@ -70,6 +70,12 @@ try {
  assert.equal(stopped,3);
  assert.doesNotMatch(fs.readFileSync(log,'utf8'),/titlebars apply/);
  assert.equal(run('install').status,0);
+ // Through a symlinked home, the checkout and the helper's canonical ownership
+ // record (the backend derives it from its own executable path) still match.
+ const link=path.join(tmp,'home-link');fs.symlinkSync(home,link);
+ const linked={...env,HOME:link,XDG_STATE_HOME:path.join(link,'.local/state'),XDG_CONFIG_HOME:path.join(link,'.config')};
+ const viaLink=mode=>spawnSync('bash',[path.join(link,'.config/omarchy/plugins/io.github.tcballard.familiar-desktop/setup-in-app.sh'),mode,'mac'],{env:linked,encoding:'utf8'});
+ r=viaLink('install');assert.equal(r.status,0,r.stdout+r.stderr);assert.equal(viaLink('status').status,0);
  // Source-bound development setup uses local bytes and never release downloads.
  const state=path.join(home,'.local/state/familiar-desktop');
  write(path.join(state,'dev-build.json'),JSON.stringify({schemaVersion:1,channel:'development',sourceDirectory:root,commit:'1'.padStart(40,'0'),assets:{[`familiar-desktop-linux-${architecture}`]:sha(helper),[`hyprbars-linux-${architecture}-${abi}.so`]:sha(library)}}));
