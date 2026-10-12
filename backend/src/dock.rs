@@ -324,7 +324,7 @@ pub fn match_pwa(class: &str, query: &str) -> bool {
             .find_map(|a| a.strip_prefix(key).map(str::to_string))
     };
     if let Some(profile) = option("--profile-directory=")
-        && !class.contains(&format!("-{}", profile.replace(' ', "_").to_lowercase()))
+        && !class.ends_with(&format!("-{}", profile.replace(' ', "_").to_lowercase()))
     {
         return false;
     }

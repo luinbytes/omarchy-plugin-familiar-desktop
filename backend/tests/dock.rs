@@ -491,3 +491,41 @@ assert(calls == 1)
     .unwrap();
     assert!(!ipc.calls.iter().any(|c| c.contains("cursor.move")));
 }
+
+#[test]
+fn pwa_activation_does_not_focus_a_profile_with_a_longer_name() {
+    let query = "google-chrome-stable --profile-directory=\"Profile 1\" --app=\"https://outlook.office.com/mail/\"";
+    let wrong = json!({"address":"0xAAA","class":"chrome-outlook.office.com__mail_-Profile_10","workspace":{"name":"2"}});
+    let right = json!({"address":"0xBBB","class":"chrome-outlook.office.com__mail_-Profile_1","workspace":{"name":"2"}});
+    let mut ipc = Fake::default();
+    assert!(
+        dock::operate(
+            "activate-instance",
+            &s(&[query]),
+            &[wrong.clone(), right],
+            &monitors(),
+            "",
+            &mut ipc
+        )
+        .unwrap()
+    );
+    assert!(
+        ipc.calls[0].contains("address:0xBBB"),
+        "wrong profile focused: {:?}",
+        ipc.calls
+    );
+    let mut ipc = Fake::default();
+    assert!(
+        !dock::operate(
+            "restore-or-launch",
+            &s(&[query]),
+            &[wrong],
+            &monitors(),
+            "",
+            &mut ipc
+        )
+        .unwrap(),
+        "another profile must not suppress launching the requested app"
+    );
+    assert!(ipc.calls.is_empty());
+}
